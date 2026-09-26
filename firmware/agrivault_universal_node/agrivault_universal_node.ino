@@ -21,6 +21,7 @@
   #include <ESP8266WebServer.h>
   #include <ESP8266HTTPClient.h>
   #include <WiFiClient.h>
+  #include <WiFiClientSecure.h>
   #include <DNSServer.h>
   #include <EEPROM.h>
   #include <ArduinoOTA.h>
@@ -31,6 +32,7 @@
   #include <WebServer.h>
   #include <HTTPClient.h>
   #include <WiFiClient.h>
+  #include <WiFiClientSecure.h>
   #include <DNSServer.h>
   #include <EEPROM.h>
   #include <ArduinoOTA.h>
@@ -174,11 +176,15 @@ void handleSave() {
       srv.remove(srv.length() - 1);
     }
     if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
-      srv = "http://" + srv;
+      if (srv.indexOf(".vercel.app") >= 0 || srv.indexOf(".com") >= 0 || srv.indexOf(".io") >= 0) {
+        srv = "https://" + srv;
+      } else {
+        srv = "http://" + srv;
+      }
     }
     int protoIdx = srv.indexOf("://");
     String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
-    if (hostPart.indexOf(':') < 0) {
+    if (srv.startsWith("http://") && hostPart.indexOf(':') < 0 && hostPart.indexOf(".vercel.app") < 0) {
       srv += ":4000";
     }
     strncpy(config.serverUrl, srv.c_str(), sizeof(config.serverUrl) - 1);
@@ -357,8 +363,7 @@ void transmitTelemetry() {
   jsonPayload += "\"capabilities\":[\"temperature\",\"humidity\",\"co2\",\"ammonia\",\"ethanol\",\"relay\"]";
   jsonPayload += "}";
 
-  // 4. Send HTTP POST to AgriVault Server
-  WiFiClient client;
+  // 4. Send HTTP/HTTPS POST to AgriVault Server
   HTTPClient http;
 
   String srv = String(config.serverUrl);
@@ -368,17 +373,32 @@ void transmitTelemetry() {
     srv.remove(srv.length() - 1);
   }
   if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
-    srv = "http://" + srv;
+    if (srv.indexOf(".vercel.app") >= 0 || srv.indexOf(".com") >= 0 || srv.indexOf(".io") >= 0) {
+      srv = "https://" + srv;
+    } else {
+      srv = "http://" + srv;
+    }
   }
   int protoIdx = srv.indexOf("://");
   String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
-  if (hostPart.indexOf(':') < 0) {
+  if (srv.startsWith("http://") && hostPart.indexOf(':') < 0 && hostPart.indexOf(".vercel.app") < 0) {
     srv += ":4000";
   }
 
   String endpoint = srv + "/api/devices/telemetry";
-  http.begin(client, endpoint);
-  http.setTimeout(2500); // 2.5s timeout prevents blocking loop()
+  bool isHttps = srv.startsWith("https://");
+
+  WiFiClient clientHttp;
+  WiFiClientSecure clientHttps;
+
+  if (isHttps) {
+    clientHttps.setInsecure(); // Accept Vercel Let's Encrypt SSL certificate
+    http.begin(clientHttps, endpoint);
+  } else {
+    http.begin(clientHttp, endpoint);
+  }
+
+  http.setTimeout(3500); // 3.5s timeout prevents blocking loop()
   http.addHeader("Content-Type", "application/json");
 
   // Indicate transmission with LED pulse
