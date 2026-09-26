@@ -133,10 +133,11 @@ router.delete('/:id', (req: Request, res: Response): void => {
   }
 
   db.transaction(() => {
-    db.run('DELETE FROM sensor_readings WHERE device_id = ?', deviceId);
-    db.run('DELETE FROM sensors WHERE device_id = ?', deviceId);
+    db.run('DELETE FROM alert_events WHERE alert_id IN (SELECT id FROM alerts WHERE device_id = ?)', deviceId);
     db.run('DELETE FROM alerts WHERE device_id = ?', deviceId);
+    db.run('DELETE FROM sensor_readings WHERE device_id = ?', deviceId);
     db.run('DELETE FROM relay_devices WHERE device_id = ?', deviceId);
+    db.run('DELETE FROM sensors WHERE device_id = ?', deviceId);
     db.run('DELETE FROM esp_devices WHERE id = ?', deviceId);
   });
 

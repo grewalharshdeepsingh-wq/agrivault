@@ -74,7 +74,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   useEffect(() => {
     fetchDevices();
-  }, [overview]);
+    const interval = setInterval(fetchDevices, 4000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Open Create Modal
   const openCreateModal = () => {

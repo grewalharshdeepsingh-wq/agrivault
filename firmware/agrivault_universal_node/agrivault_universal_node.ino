@@ -136,10 +136,11 @@ void handleRoot() {
     "<input type=\"password\" name=\"pass\" value=\"\"><br><br>"
     "<hr>"
     "<h3>Step 2: Server Connection</h3>"
-    "<label>AgriVault Server Base URL (e.g. http://192.168.1.100:4000):</label><br>"
+    "<label>AgriVault Server Base URL (e.g. http://192.168.1.13:4000):</label><br>"
     "<input type=\"text\" name=\"server\" value=\"");
   html += String(config.serverUrl);
-  html += F("\" required><br><br>"
+  html += F("\" required><br>"
+    "<small style=\"color:#c0392b;\"><b>Note:</b> Enter your computer's IP on your home Wi-Fi (e.g. <code>http://192.168.1.13:4000</code>). Do NOT use 192.168.4.x (which is this setup hotspot).</small><br><br>"
     "<label>Friendly Device / Room Label (optional):</label><br>"
     "<input type=\"text\" name=\"name\" value=\"");
   html += String(config.deviceName);
@@ -168,8 +169,17 @@ void handleSave() {
   if (server.hasArg("server")) {
     String srv = server.arg("server");
     srv.trim();
+    srv.replace(" ", ""); // Strip accidental spaces e.g. "http:// 192.168..."
     while (srv.endsWith("/")) {
       srv.remove(srv.length() - 1);
+    }
+    if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
+      srv = "http://" + srv;
+    }
+    int protoIdx = srv.indexOf("://");
+    String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
+    if (hostPart.indexOf(':') < 0) {
+      srv += ":4000";
     }
     strncpy(config.serverUrl, srv.c_str(), sizeof(config.serverUrl) - 1);
   }
@@ -351,8 +361,24 @@ void transmitTelemetry() {
   WiFiClient client;
   HTTPClient http;
 
-  String endpoint = String(config.serverUrl) + "/api/devices/telemetry";
+  String srv = String(config.serverUrl);
+  srv.trim();
+  srv.replace(" ", ""); // Strip accidental spaces
+  while (srv.endsWith("/")) {
+    srv.remove(srv.length() - 1);
+  }
+  if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
+    srv = "http://" + srv;
+  }
+  int protoIdx = srv.indexOf("://");
+  String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
+  if (hostPart.indexOf(':') < 0) {
+    srv += ":4000";
+  }
+
+  String endpoint = srv + "/api/devices/telemetry";
   http.begin(client, endpoint);
+  http.setTimeout(2500); // 2.5s timeout prevents blocking loop()
   http.addHeader("Content-Type", "application/json");
 
   // Indicate transmission with LED pulse
@@ -466,6 +492,30 @@ void loop() {
   // Normal Connected Operation Mode
   ArduinoOTA.handle();
   server.handleClient();
+
+  // Listen for configuration commands on USB Serial Monitor
+  if (Serial.available()) {
+    String cmd = Serial.readStringUntil('\n');
+    cmd.trim();
+    if (cmd.equalsIgnoreCase("RESET")) {
+      Serial.println(F("[Serial] Erasing EEPROM configuration and returning to SoftAP..."));
+      resetConfig();
+      ESP.restart();
+    } else if (cmd.startsWith("SERVER=")) {
+      String newSrv = cmd.substring(7);
+      newSrv.trim();
+      newSrv.replace(" ", "");
+      if (!newSrv.startsWith("http://") && !newSrv.startsWith("https://")) {
+        newSrv = "http://" + newSrv;
+      }
+      strncpy(config.serverUrl, newSrv.c_str(), sizeof(config.serverUrl) - 1);
+      strncpy(config.magic, "AGRIV13", sizeof(config.magic));
+      saveConfig();
+      Serial.print(F("[Serial] Server URL updated to: "));
+      Serial.println(config.serverUrl);
+      transmitTelemetry();
+    }
+  }
 
   // Periodic Telemetry Streaming Timer
   unsigned long now = millis();
