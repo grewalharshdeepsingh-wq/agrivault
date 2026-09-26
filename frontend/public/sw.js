@@ -44,13 +44,10 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first with network fallback for UI assets
+  // Network-first with cache fallback for UI assets and scripts
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -58,7 +55,7 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      });
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
