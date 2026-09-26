@@ -1,0 +1,22 @@
+[Unit]
+Description=AgriVault Cold Storage Central IoT Gateway Service
+After=network.target mosquitto.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/agrivault/gateway
+Environment="GATEWAY_ID=gw-01"
+Environment="FACILITY_ID=fac-01"
+Environment="CLOUD_API_URL=https://your-agrivault-cloud.com/api"
+Environment="LOCAL_DB_PATH=/var/lib/agrivault/gateway_buffer.db"
+ExecStart=/usr/bin/python3 /opt/agrivault/gateway/gateway_daemon.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=agrivault-gateway
+
+[Install]
+WantedBy=multi-user.target

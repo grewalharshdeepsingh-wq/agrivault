@@ -1,0 +1,206 @@
+import React from 'react';
+import { Area } from '../types';
+import {
+  Thermometer,
+  Droplets,
+  Wind,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  TrendingDown,
+  TrendingUp,
+  Minus,
+  ArrowRight,
+  ShieldAlert
+} from 'lucide-react';
+
+interface AreaCardProps {
+  area: Area;
+  onClick: () => void;
+}
+
+export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick }) => {
+  const { metrics, health_status, health_score, health_reasons, name, commodity, deviceCount, activeAlertsCount } = area;
+
+  const temp = metrics?.temperature;
+  const hum = metrics?.humidity;
+  const co2 = metrics?.co2;
+  const eth = metrics?.ethylene;
+  const nh3 = metrics?.ammonia;
+  const voc = metrics?.ethanol;
+
+  // Status Styling
+  const statusConfig = {
+    normal: {
+      border: 'border-emerald-500/30 hover:border-emerald-500/60',
+      badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+      dot: 'bg-emerald-400',
+      label: 'Normal'
+    },
+    attention: {
+      border: 'border-yellow-500/40 hover:border-yellow-500/70',
+      badge: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40',
+      dot: 'bg-yellow-400',
+      label: 'Attention'
+    },
+    warning: {
+      border: 'border-amber-500/50 hover:border-amber-500/80',
+      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
+      dot: 'bg-amber-400',
+      label: 'Warning'
+    },
+    critical: {
+      border: 'border-rose-500/60 hover:border-rose-500',
+      badge: 'bg-rose-500/25 text-rose-300 border-rose-500/60 animate-pulse',
+      dot: 'bg-rose-400',
+      label: 'Critical'
+    }
+  }[health_status || 'normal'];
+
+  // Helper for Rate of Change trend
+  const renderRoc = (roc?: number, unit = '', period = '30 min') => {
+    if (roc === undefined || roc === 0) return null;
+    const isUp = roc > 0;
+    return (
+      <span className={`inline-flex items-center text-[10px] font-mono ${isUp ? 'text-amber-400' : 'text-sky-400'}`}>
+        {isUp ? <TrendingUp className="w-2.5 h-2.5 mr-0.5" /> : <TrendingDown className="w-2.5 h-2.5 mr-0.5" />}
+        {isUp ? '+' : ''}{roc}{unit} / {period}
+      </span>
+    );
+  };
+
+  return (
+    <div
+      onClick={onClick}
+      className={`group bg-vault-900/90 rounded-xl border ${statusConfig.border} p-4 transition-all duration-200 hover:shadow-xl hover:shadow-vault-950/50 cursor-pointer flex flex-col justify-between`}
+    >
+      {/* Card Header */}
+      <div>
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-bold text-white tracking-tight group-hover:text-agri-400 transition">
+                {name}
+              </h3>
+            </div>
+            <p className="text-xs text-vault-400 font-medium">{commodity}</p>
+          </div>
+
+          {/* Health Score & Status Badge */}
+          <div className="flex flex-col items-end gap-1">
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusConfig.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></span>
+              {statusConfig.label} ({Math.round(health_score)}%)
+            </span>
+            {activeAlertsCount !== undefined && activeAlertsCount > 0 && (
+              <span className="text-[10px] text-rose-400 font-mono font-medium flex items-center gap-1">
+                <AlertTriangle className="w-3 h-3 text-rose-400" />
+                {activeAlertsCount} Alert{activeAlertsCount > 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Primary Metrics Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 my-3">
+          {/* Temperature */}
+          <div className="bg-vault-950/70 rounded-lg p-2.5 border border-vault-800/80">
+            <div className="flex items-center justify-between text-vault-400 text-xs mb-1">
+              <span className="flex items-center gap-1">
+                <Thermometer className="w-3.5 h-3.5 text-rose-400" /> Temp
+              </span>
+              <span className="text-[10px] text-vault-500 font-mono">°C</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-lg font-bold font-mono text-white">
+                {temp ? temp.value.toFixed(1) : '--'}
+              </span>
+              {renderRoc(temp?.rateOfChange, '°C')}
+            </div>
+          </div>
+
+          {/* Humidity */}
+          <div className="bg-vault-950/70 rounded-lg p-2.5 border border-vault-800/80">
+            <div className="flex items-center justify-between text-vault-400 text-xs mb-1">
+              <span className="flex items-center gap-1">
+                <Droplets className="w-3.5 h-3.5 text-sky-400" /> Humidity
+              </span>
+              <span className="text-[10px] text-vault-500 font-mono">%</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-lg font-bold font-mono text-white">
+                {hum ? Math.round(hum.value) : '--'}
+              </span>
+              {renderRoc(hum?.rateOfChange, '%')}
+            </div>
+          </div>
+
+          {/* CO2 */}
+          <div className="bg-vault-950/70 rounded-lg p-2.5 border border-vault-800/80">
+            <div className="flex items-center justify-between text-vault-400 text-xs mb-1">
+              <span className="flex items-center gap-1">
+                <Wind className="w-3.5 h-3.5 text-emerald-400" /> CO2
+              </span>
+              <span className="text-[10px] text-vault-500 font-mono">ppm</span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className={`text-lg font-bold font-mono ${co2 && co2.value > 1300 ? 'text-amber-400' : 'text-white'}`}>
+                {co2 ? Math.round(co2.value).toLocaleString() : '--'}
+              </span>
+              {renderRoc(co2?.rateOfChange, '')}
+            </div>
+          </div>
+
+          {/* Ethylene */}
+          <div className="bg-vault-950/70 rounded-lg p-2 border border-vault-800/60">
+            <span className="text-[11px] text-vault-400 block mb-0.5">Ethylene</span>
+            <span className="text-sm font-bold font-mono text-slate-200">
+              {eth ? eth.value.toFixed(2) : '0.04'} <span className="text-[10px] font-normal text-vault-500">ppm</span>
+            </span>
+          </div>
+
+          {/* Ammonia */}
+          <div className="bg-vault-950/70 rounded-lg p-2 border border-vault-800/60">
+            <span className="text-[11px] text-vault-400 block mb-0.5">Ammonia</span>
+            <span className="text-sm font-bold font-mono text-slate-200">
+              {nh3 ? nh3.value.toFixed(1) : '1.8'} <span className="text-[10px] font-normal text-vault-500">ppm</span>
+            </span>
+          </div>
+
+          {/* Ethanol / VOC */}
+          <div className="bg-vault-950/70 rounded-lg p-2 border border-vault-800/60">
+            <span className="text-[11px] text-vault-400 block mb-0.5">Ethanol / VOC</span>
+            <span className="text-sm font-bold font-mono text-slate-200">
+              {voc ? voc.value.toFixed(1) : '0.6'} <span className="text-[10px] font-normal text-vault-500">ppm</span>
+            </span>
+          </div>
+        </div>
+
+        {/* Operational Health Reasons */}
+        {health_reasons && health_reasons.length > 0 && (
+          <div className="mt-2 text-xs bg-vault-950/40 rounded p-2 border border-vault-800/40">
+            <p className="text-[11px] font-semibold text-vault-400 mb-0.5">Operational Assessment:</p>
+            <ul className="space-y-0.5 text-[11px] text-slate-300">
+              {health_reasons.slice(0, 2).map((r, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="text-agri-400 shrink-0">•</span>
+                  <span className="line-clamp-1">{r}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Card Footer */}
+      <div className="pt-3 mt-2 border-t border-vault-800/60 flex items-center justify-between text-xs text-vault-400">
+        <span className="font-mono text-[11px]">
+          {deviceCount || 1} ESP Node{deviceCount !== 1 ? 's' : ''} Online
+        </span>
+        <span className="inline-flex items-center gap-1 font-semibold text-agri-400 group-hover:translate-x-1 transition-transform">
+          Open Telemetry <ArrowRight className="w-3.5 h-3.5" />
+        </span>
+      </div>
+    </div>
+  );
+};

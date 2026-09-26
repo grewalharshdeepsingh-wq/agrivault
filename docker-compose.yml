@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  agrivault-backend:
+    build:
+      context: ./backend
+      dockerfile: ../Dockerfile.backend
+    container_name: agrivault-backend
+    restart: always
+    ports:
+      - "4000:4000"
+      - "1883:1883"
+    environment:
+      - PORT=4000
+      - MQTT_PORT=1883
+      - JWT_SECRET=agrivault-production-jwt-secure-token-98234
+      - DATABASE_TYPE=sqlite
+      - DATABASE_PATH=/app/data/agrivault.db
+      - HEARTBEAT_TIMEOUT_SECONDS=60
+      - SIMULATION_ENABLED=false
+    volumes:
+      - agrivault-data:/app/data
+
+  agrivault-frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile.frontend
+    container_name: agrivault-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - agrivault-backend
+
+volumes:
+  agrivault-data:
