@@ -69,8 +69,14 @@ app.get('/api', (req, res) => {
 });
 
 // Serve compiled PWA frontend assets if dist folder exists
-const frontendDist = path.resolve(process.cwd(), '../frontend/dist');
-if (fs.existsSync(frontendDist)) {
+const possibleDistPaths = [
+  path.resolve(process.cwd(), '../frontend/dist'),
+  path.resolve(process.cwd(), 'frontend/dist'),
+  path.resolve(__dirname, '../../frontend/dist'),
+  path.resolve(__dirname, '../../../frontend/dist')
+];
+const frontendDist = possibleDistPaths.find(p => fs.existsSync(p));
+if (frontendDist) {
   app.use(express.static(frontendDist));
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
