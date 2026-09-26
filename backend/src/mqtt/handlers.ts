@@ -9,14 +9,23 @@ import { broadcast } from '../websocket/wsServer.js';
 
 interface ParsedTopic {
   facilityId: string;
-  gatewayId: string;
+  gatewayId?: string;
   deviceId: string;
   action: 'telemetry' | 'status' | 'command' | 'response';
 }
 
 export function parseTopic(topic: string): ParsedTopic | null {
   const parts = topic.split('/');
-  // Expected: agrivault / {facId} / gateway / {gwId} / device / {devId} / {action}
+  // Direct over Internet: agrivault / {facId} / device / {devId} / {action}
+  if (parts.length === 5 && parts[0] === 'agrivault' && parts[2] === 'device') {
+    return {
+      facilityId: parts[1],
+      gatewayId: undefined,
+      deviceId: parts[3],
+      action: parts[4] as any
+    };
+  }
+  // Legacy Gateway: agrivault / {facId} / gateway / {gwId} / device / {devId} / {action}
   if (parts.length === 7 && parts[0] === 'agrivault' && parts[2] === 'gateway' && parts[4] === 'device') {
     return {
       facilityId: parts[1],
@@ -55,7 +64,7 @@ export function handleMqttMessage(topic: string, payloadStr: string): void {
  */
 export function handleDeviceStatus(
   facilityId: string,
-  gatewayId: string,
+  gatewayId: string | undefined | null,
   deviceId: string,
   payload: {
     hardwareType?: string;
@@ -71,8 +80,12 @@ export function handleDeviceStatus(
   let dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
 
   if (!dev) {
-    // 1. AUTO-DISCOVER NEW DEVICE!
-    const defaultName = `New Device: ${deviceId}`;
+    // 1. AUTO-DISCOVER NEW DEVICE OVER INTERNET!
+    const isEsp8266 = deviceId.toUpperCase().includes('8266') || (payload.hardwareType && payload.hardwareType.toUpperCase().includes('8266'));
+    const hwType = payload.hardwareType || (isEsp8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
+    const mac = payload.macAddress || (isEsp8266 ? '5C:CF:7F:00:00:01' : '24:0A:C4:00:00:01');
+    const defaultName = `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${deviceId}`;
+
     db.run(
       `INSERT INTO esp_devices (
         id, facility_id, area_id, gateway_id, user_name, hardware_type,
@@ -82,12 +95,12 @@ export function handleDeviceStatus(
       deviceId,
       facilityId,
       null, // unassigned initially
-      gatewayId,
+      gatewayId || null,
       defaultName,
-      payload.hardwareType || 'ESP32-DevKit-V1',
-      payload.firmwareVersion || '1.0.0',
+      hwType,
+      payload.firmwareVersion || '1.3.0-ota',
       payload.ipAddress || '192.168.1.199',
-      payload.macAddress || '24:0A:C4:00:00:01',
+      mac,
       1,
       now,
       payload.rssi || -55,
@@ -104,10 +117,10 @@ export function handleDeviceStatus(
       if (cap === 'relay') continue;
       const sId = `sens-${deviceId}-${cap}`;
       let unit = 'ppm';
-      let pin = 'GPIO 35';
-      if (cap === 'temperature') { unit = '°C'; pin = 'GPIO 4'; }
-      if (cap === 'humidity') { unit = '%'; pin = 'GPIO 32'; }
-      if (cap === 'ethanol') { pin = 'GPIO 34'; }
+      let pin = isEsp8266 ? 'D1 (GPIO 5)' : 'GPIO 35';
+      if (cap === 'temperature') { unit = '°C'; pin = isEsp8266 ? 'D2 (GPIO 4)' : 'GPIO 4'; }
+      if (cap === 'humidity') { unit = '%'; pin = isEsp8266 ? 'D7 (GPIO 13)' : 'GPIO 32'; }
+      if (cap === 'ethanol') { pin = isEsp8266 ? 'A0 (ADC0)' : 'GPIO 34'; }
 
       db.run(
         `INSERT INTO sensors (
@@ -126,9 +139,9 @@ export function handleDeviceStatus(
     broadcast('device_discovered', {
       device: dev,
       capabilities: caps,
-      message: `New sensor node ${deviceId} discovered by gateway!`
+      message: `New ${isEsp8266 ? 'ESP8266' : 'ESP32'} node ${deviceId} connected directly over Internet!`
     });
-    console.log(`[Discovery] Auto-registered new ESP sensor node: ${deviceId}`);
+    console.log(`[Discovery] Auto-registered new ${isEsp8266 ? 'ESP8266' : 'ESP32'} sensor node: ${deviceId} (Direct Internet)`);
   } else {
     // Existing device heartbeat update
     recordDeviceHeartbeat(deviceId, payload.rssi, payload.ipAddress);
@@ -141,7 +154,7 @@ export function handleDeviceStatus(
  */
 export function handleDeviceTelemetry(
   facilityId: string,
-  gatewayId: string,
+  gatewayId: string | undefined | null,
   deviceId: string,
   payload: Record<string, any>
 ): void {
@@ -273,7 +286,7 @@ export function handleDeviceTelemetry(
   });
 }
 
-export function handleDeviceResponse(facilityId: string, gatewayId: string, deviceId: string, payload: any): void {
+export function handleDeviceResponse(facilityId: string, gatewayId: string | undefined | null, deviceId: string, payload: any): void {
   // Command execution ack from device
   broadcast('device_command_ack', {
     deviceId,

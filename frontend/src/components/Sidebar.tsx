@@ -114,17 +114,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
         })}
       </nav>
 
-      {/* Gateway Telemetry Footer */}
+      {/* Cloud IoT Telemetry Footer */}
       <div className="p-3 m-3 rounded-lg bg-vault-950/80 border border-vault-800 text-xs">
         <div className="flex items-center justify-between text-vault-400 mb-1">
-          <span className="font-mono text-[11px]">GATEWAY 01</span>
+          <span className="font-mono text-[11px]">CLOUD IOT BROKER</span>
           <span className="flex items-center gap-1 text-emerald-400 text-[11px] font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            ONLINE
+            ACTIVE
           </span>
         </div>
-        <p className="text-[11px] text-vault-400 font-mono truncate">192.168.1.100</p>
-        <p className="text-[10px] text-vault-500 mt-0.5">RPi 4 | Mesh Wi-Fi Active</p>
+        <p className="text-[11px] text-emerald-300 font-mono truncate">Direct Internet Sync</p>
+        <p className="text-[10px] text-vault-500 mt-0.5">ESP32 & ESP8266 Nodes</p>
       </div>
     </aside>
   );

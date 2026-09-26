@@ -11,7 +11,8 @@ import {
   CheckCircle,
   AlertTriangle,
   Clock,
-  HardDrive
+  HardDrive,
+  Globe
 } from 'lucide-react';
 
 export const SystemHealthPage: React.FC = () => {
@@ -52,7 +53,7 @@ export const SystemHealthPage: React.FC = () => {
             System Diagnostics & Infrastructure Health
           </h1>
           <p className="text-xs text-vault-400">
-            Real-time status of backend API services, SQLite WAL database, embedded MQTT broker, gateways, and edge nodes.
+            Real-time status of backend API services, SQLite WAL database, embedded MQTT broker, direct cloud IoT ingestion, and edge ESP nodes.
           </p>
         </div>
 
@@ -155,40 +156,40 @@ export const SystemHealthPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Raspberry Pi Gateway */}
+          {/* Direct Cloud IoT Ingestion */}
           <div className="bg-vault-900 border border-vault-800 rounded-xl p-4 shadow-md space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <HardDrive className="w-5 h-5 text-agri-400" />
-                <h3 className="text-sm font-bold text-white">Raspberry Pi Gateway</h3>
+                <Globe className="w-5 h-5 text-agri-400" />
+                <h3 className="text-sm font-bold text-white">Direct Cloud IoT Broker</h3>
               </div>
               <span className="flex items-center gap-1 text-emerald-400 text-xs font-semibold">
                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                ACTIVE (1/1)
+                ACTIVE (WAN)
               </span>
             </div>
             <div className="space-y-1.5 text-xs font-mono bg-vault-950 p-2.5 rounded border border-vault-800/80 text-vault-300 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-vault-500">FIRMWARE:</span>
-                <span>v2.4.0-rpi-gateway</span>
+                <span className="text-vault-500">INGESTION MODE:</span>
+                <span className="text-emerald-400">Direct Internet (No Gateway)</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-vault-500">BUFFER STATE:</span>
-                <span className="text-emerald-400">Synchronized (0 pending)</span>
+                <span className="text-vault-500">HTTP REST INGEST:</span>
+                <span>/api/devices/telemetry</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-vault-500">WI-FI MESH:</span>
-                <span>AgriVault-Local-Mesh-5G</span>
+                <span className="text-vault-500">MQTT BROKER:</span>
+                <span>Port 1883 (TCP / SSL)</span>
               </div>
             </div>
           </div>
 
-          {/* ESP32 Edge Sensor Nodes */}
+          {/* ESP32 & ESP8266 Edge Sensor Nodes */}
           <div className="bg-vault-900 border border-vault-800 rounded-xl p-4 shadow-md space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Cpu className="w-5 h-5 text-agri-400" />
-                <h3 className="text-sm font-bold text-white">ESP32 Sensor Nodes</h3>
+                <h3 className="text-sm font-bold text-white">ESP32 & ESP8266 Sensor Fleet</h3>
               </div>
               <span className="text-xs font-mono font-bold text-white">
                 {healthData.services.espDevices.online}/{healthData.services.espDevices.total} Online
@@ -202,12 +203,12 @@ export const SystemHealthPage: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-vault-500">WATCHDOG TIMEOUT:</span>
-                <span>60 Seconds</span>
+                <span className="text-vault-500">CONNECTED HARDWARE:</span>
+                <span>ESP32 & ESP8266</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-vault-500">HARDWARE TYPE:</span>
-                <span>ESP32-DevKit-V1</span>
+                <span className="text-vault-500">WATCHDOG TIMEOUT:</span>
+                <span>60 Seconds (Auto-Alert)</span>
               </div>
             </div>
           </div>

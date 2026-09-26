@@ -13,6 +13,7 @@ import {
   Wind,
   ShieldCheck,
   Radio,
+  Globe,
   ArrowRight,
   Sparkles,
   Wifi,
@@ -243,7 +244,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <span className="text-xs font-mono text-rose-400 font-semibold">({offlineESPs} off)</span>
               )}
             </div>
-            <span className="text-[10px] text-emerald-400 font-medium">Auto-Discovery Active</span>
+            <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
+              <Globe className="w-2.5 h-2.5" /> Direct Internet (WAN)
+            </span>
           </div>
 
           {/* Active Alerts */}
@@ -303,35 +306,75 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Discovered / Unassigned ESPs Quick Prompt */}
+      {/* Discovered / Available ESPs Quick Prompt */}
       {pendingDiscoveredESPs.length > 0 && (
-        <div className="bg-indigo-950/40 border border-indigo-500/40 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-300">
-              <Cpu className="w-5 h-5" />
+        <div className="bg-gradient-to-r from-indigo-950/60 via-vault-900 to-indigo-950/60 border border-indigo-500/50 rounded-2xl p-4 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                <Sparkles className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>{pendingDiscoveredESPs.length} Available ESP Node{pendingDiscoveredESPs.length > 1 ? 's' : ''} Connected Over Internet</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500 text-white">
+                    READY FOR ROOM SETUP
+                  </span>
+                </p>
+                <p className="text-xs text-indigo-200/90 mt-0.5">
+                  Microcontrollers detected via direct Wi-Fi/WAN link and streaming telemetry. Assign them to a storage room.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-white">
-                {pendingDiscoveredESPs.length} ESP Module{pendingDiscoveredESPs.length > 1 ? 's' : ''} Ready for Setup
-              </p>
-              <p className="text-xs text-indigo-200/80">
-                Connected to network and transmitting telemetry. Assign them to a room or section.
-              </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={openCreateModal}
+                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition"
+              >
+                + Create Room for Device
+              </button>
+              <button
+                onClick={onNavigateToDevices}
+                className="px-3.5 py-1.5 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-medium border border-vault-700 transition"
+              >
+                View Available Fleet
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={openCreateModal}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition"
-            >
-              + Create Room for Device
-            </button>
-            <button
-              onClick={onNavigateToDevices}
-              className="px-3 py-1.5 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-medium border border-vault-700 transition"
-            >
-              View Device Inventory
-            </button>
+
+          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-indigo-500/20">
+            {pendingDiscoveredESPs.map((d) => {
+              const dev8266 = (d.hardware_type || '').includes('8266') || d.id.includes('8266');
+              return (
+                <div
+                  key={d.id}
+                  className="bg-vault-950/90 border border-indigo-500/30 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-2"
+                >
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                      dev8266
+                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                    }`}
+                  >
+                    {dev8266 ? 'ESP8266' : 'ESP32'}
+                  </span>
+                  <span className="font-semibold text-white">{d.user_name || d.id}</span>
+                  <span className="text-[10px] font-mono text-vault-400">({d.ip_address || 'Internet WAN'})</span>
+                  <button
+                    onClick={() => {
+                      setRoomName('');
+                      setRoomCommodity('Potato (Bulk Store)');
+                      setSelectedDeviceIds([d.id]);
+                      setShowAddRoomModal(true);
+                    }}
+                    className="ml-1 text-[11px] font-semibold text-indigo-400 hover:text-indigo-200 underline"
+                  >
+                    Assign
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -568,9 +611,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             className="rounded border-vault-700 text-agri-500 focus:ring-0"
                           />
                           <div>
-                            <p className="font-semibold text-white">{dev.user_name || dev.id}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-white">{dev.user_name || dev.id}</p>
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[9px] font-mono font-bold uppercase ${
+                                  (dev.hardware_type || '').includes('8266') || dev.id.includes('8266')
+                                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
+                                    : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+                                }`}
+                              >
+                                {(dev.hardware_type || '').includes('8266') || dev.id.includes('8266') ? 'ESP8266' : 'ESP32'}
+                              </span>
+                              {!dev.area_id && (
+                                <span className="text-[9px] font-mono uppercase bg-indigo-500/30 text-indigo-300 px-1 py-0.5 rounded border border-indigo-500/40">
+                                  Available
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-vault-400 font-mono">
-                              {dev.id} • {dev.hardware_type || 'ESP'} • {dev.ip_address}
+                              {dev.id} • {dev.ip_address || 'Internet WAN'} • Direct Internet
                             </span>
                           </div>
                         </div>
@@ -617,28 +676,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
 
-      {/* Gateway & Offline Resilience Notice */}
+      {/* Direct Cloud IoT Architecture Notice */}
       <div className="bg-vault-900 border border-vault-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <Radio className="w-4 h-4" />
+            <Globe className="w-4 h-4" />
           </div>
           <div>
-            <p className="font-semibold text-slate-200">
-              Raspberry Pi Gateway 01 ({gateway?.ip_address || '192.168.1.100'})
+            <p className="font-semibold text-slate-200 flex items-center gap-2">
+              <span>Direct Cloud IoT Architecture</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                ZERO HARDWARE GATEWAY
+              </span>
             </p>
             <p className="text-vault-400">
-              {gateway?.status_detail || 'Online — Local Wi-Fi Mesh operating with local SQLite fallback buffer.'}
+              ESP32 & ESP8266 nodes stream telemetry directly over Wi-Fi and Internet to cloud REST & MQTT endpoints.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-center">
           <span className="px-2.5 py-1 rounded bg-vault-950 border border-vault-800 text-[11px] font-mono text-agri-400">
-            BUFFER: 0 PENDING
+            REST /telemetry | MQTT :1883
           </span>
           <span className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold text-[11px]">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            CLOUD SYNCED
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            INTERNET LIVE
           </span>
         </div>
       </div>

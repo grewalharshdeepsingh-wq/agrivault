@@ -56,7 +56,7 @@ export interface ESPDevice {
   id: string;
   facility_id: string;
   area_id: string | null;
-  gateway_id: string;
+  gateway_id?: string | null;
   user_name: string;
   hardware_type: string;
   firmware_version: string;

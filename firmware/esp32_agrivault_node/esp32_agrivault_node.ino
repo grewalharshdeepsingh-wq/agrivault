@@ -49,9 +49,9 @@ String getUniqueDeviceId() {
 }
 
 void setupTopics() {
-    // Standard AgriVault hardware protocol:
-    // agrivault/{facilityId}/gateway/{gatewayId}/device/{deviceId}/{action}
-    String prefix = "agrivault/" + String(FACILITY_ID) + "/gateway/" + String(GATEWAY_ID) + "/device/" + deviceId;
+    // Direct AgriVault hardware protocol over Internet:
+    // agrivault/{facilityId}/device/{deviceId}/{action}
+    String prefix = "agrivault/" + String(FACILITY_ID) + "/device/" + deviceId;
     telemetryTopic = prefix + "/telemetry";
     statusTopic    = prefix + "/status";
     commandTopic   = prefix + "/command";
@@ -124,13 +124,13 @@ void sendDiscoveryAnnouncement() {
     "}";
 
     mqttClient.publish(statusTopic.c_str(), statusPayload.c_str(), true);
-    Serial.println("[Discovery] Sent auto-discovery announcement to Gateway");
+    Serial.println("[Discovery] Sent auto-discovery announcement to AgriVault Server over Internet");
 }
 
 void connectMQTT() {
     if (mqttClient.connected()) return;
 
-    Serial.print("[MQTT] Connecting to Gateway broker: ");
+    Serial.print("[MQTT] Connecting to AgriVault broker over Internet: ");
     Serial.println(MQTT_BROKER_HOST);
 
     mqttClient.setServer(MQTT_BROKER_HOST, MQTT_BROKER_PORT);

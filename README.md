@@ -3,37 +3,31 @@
 
 ---
 
-## 🌟 Architecture Overview
+## 🌟 Architecture Overview (Direct-to-Cloud IoT)
 
 ```
                       +---------------------------------------+
-                      |         AgriVault Cloud / VPS         |
+                      |        AgriVault Cloud / Server       |
                       |  - Node.js & TypeScript REST API      |
                       |  - Real-Time WebSocket Telemetry /ws  |
                       |  - Embedded Aedes MQTT Broker :1883   |
+                      |  - Direct Cloud Ingest (/api/telemetry)|
                       |  - SQLite WAL / Timescale DB          |
                       |  - Multi-Sensor Health & Alert Engine |
                       |  - Desktop / Mobile PWA Dashboard     |
                       +---------------------------------------+
                                           ▲
-                     Internet / VPN (with automatic sync)
-                                          ▼
-                      +---------------------------------------+
-                      |     Raspberry Pi Central Gateway      |
-                      |  - Local Wi-Fi Mesh Controller        |
-                      |  - Offline SQLite Telemetry Buffer    |
-                      |  - Zero Data Loss Replay Queue        |
-                      |  - Emergency Local Hysteresis Relay   |
-                      +---------------------------------------+
-                                          ▲
-                              Local Wi-Fi / MQTT
+                                          │ Direct Internet Connection
+                                          │ (Wi-Fi / WAN / Cellular)
                                           ▼
             +---------------------+               +---------------------+
-            |  ESP32 Sensor Node  |               |  ESP32 Sensor Node  |
-            |  (Area 1 - Potato)  |               |  (Area 3 - Fruit)   |
+            |  ESP32 Sensor Node  |               | ESP8266 Sensor Node |
+            |  (Area 1 - Potato)  |               | (Area 3 - Fruit CA) |
+            | - Direct HTTP / MQTT|               | - Direct HTTP / MQTT|
+            | - SoftAP Web Wizard |               | - SoftAP Web Wizard |
+            | - Auto-Discovery    |               | - Auto-Discovery    |
             | - DS18B20 Temp Probe|               | - DS18B20 Temp Probe|
-            | - MQ-3 VOC/Ethanol  |               | - MQ-3 VOC/Ethanol  |
-            | - MQ-135 NH3 / CO2  |               | - MQ-135 NH3 / CO2  |
+            | - MQ-3 VOC/Ethanol  |               | - MQ-135 Gas Sensor |
             | - 5V Relay Module   |               | - 5V Relay Module   |
             +---------------------+               +---------------------+
 ```
@@ -66,10 +60,10 @@ agrivault/
 │   │   │   ├── storageHealth.ts    # Multi-sensor compound risk analyzer
 │   │   │   ├── areaHealthScore.ts  # Mathematical 0-100 score calculation
 │   │   │   ├── automationEngine.ts # Relay control with safe deadband hysteresis
-│   │   │   └── heartbeatWatchdog.ts# Node/Gateway online/offline tracker
+│   │   │   └── heartbeatWatchdog.ts# Node online/offline connectivity tracker
 │   │   ├── mqtt/                   # Embedded Aedes MQTT Broker & Topic Router
 │   │   │   ├── broker.ts           # TCP port 1883 with authentication
-│   │   │   └── handlers.ts         # Telemetry, status, commands & auto-discovery
+│   │   │   └── handlers.ts         # Direct telemetry, status, commands & auto-discovery
 │   │   ├── websocket/              # Real-Time WebSocket stream (/ws)
 │   │   ├── routes/                 # REST API Routers
 │   │   ├── simulator/              # Virtual IoT Fleet with 10 physics scenarios
@@ -87,19 +81,19 @@ agrivault/
 │   │   ├── api/                    # REST client & WebSocket manager
 │   │   ├── components/             # Industrial UI Components
 │   │   │   ├── Navbar.tsx          # Status chips, telemetry pulse & role switcher
-│   │   │   ├── Sidebar.tsx         # Desktop navigation
+│   │   │   ├── Sidebar.tsx         # Desktop navigation with direct cloud IoT indicator
 │   │   │   ├── MobileNav.tsx       # Bottom navigation bar for mobile PWA
 │   │   │   ├── AreaCard.tsx        # Zone summary cards with rate of change
 │   │   │   ├── AlertBanner.tsx     # Actionable alert banner with causes
 │   │   │   └── OnboardingWizard.tsx# 10-Step interactive guided facility setup
 │   │   ├── pages/                  # Application Views
-│   │   │   ├── Dashboard.tsx       # Executive overview
+│   │   │   ├── Dashboard.tsx       # Executive overview & available ESP quick-pair
 │   │   │   ├── AreaDetail.tsx      # Recharts deep-dive & multi-sensor analysis
-│   │   │   ├── DevicesPage.tsx     # ESP discovery, rename & area mapping
+│   │   │   ├── DevicesPage.tsx     # Direct ESP32/ESP8266 discovery, filter & assignment
 │   │   │   ├── AlertsPage.tsx      # Alert center with causes & actions
 │   │   │   ├── ReportsPage.tsx     # Historical report synthesis & CSV export
 │   │   │   ├── AutomationPage.tsx  # Relay controls & hysteresis rules
-│   │   │   ├── SystemHealthPage.tsx# Diagnostics for DB, MQTT, Gateways & Nodes
+│   │   │   ├── SystemHealthPage.tsx# Diagnostics for DB, MQTT broker, and edge nodes
 │   │   │   ├── SimulationPage.tsx  # 10 Controllable demo scenarios
 │   │   │   └── SettingsPage.tsx    # Multi-scope thresholds & RBAC roles
 │   │   ├── App.tsx
@@ -107,17 +101,15 @@ agrivault/
 │   ├── package.json
 │   └── vite.config.ts
 │
-├── gateway/                        # Raspberry Pi Local Controller Service
-│   ├── gateway_daemon.py           # Offline SQLite buffer & cloud sync daemon
-│   ├── agrivault-gateway.service   # Linux systemd auto-start service
-│   └── README.md                   # RPi wiring & deployment guide
-│
-├── firmware/                       # ESP32 C++ Production Firmware
-│   ├── esp32_agrivault_node/
-│   │   ├── esp32_agrivault_node.ino# Arduino/PlatformIO sketch with auto-discovery
-│   │   ├── config.h                # Pins, Wi-Fi credentials & topics
+├── firmware/                       # ESP32 & ESP8266 Universal C++ Firmware
+│   ├── agrivault_universal_node/   # Universal ESP8266 / ESP32 dual firmware
+│   │   ├── agrivault_universal_node.ino # SoftAP Captive Portal, Web OTA, HTTP ingest
+│   │   └── config.h                # Hardware pins & network defaults
+│   ├── esp32_agrivault_node/       # Native ESP32 Direct MQTT node
+│   │   ├── esp32_agrivault_node.ino# Direct MQTT telemetry & auto-discovery
+│   │   ├── config.h                # Pins & cloud broker configuration
 │   │   └── calibration.h           # Gas curve models & Ro calculations
-│   └── README.md                   # Pinout diagram, schematics, pull-up resistors
+│   └── README.md                   # Pinout diagram, SoftAP setup, schematics
 │
 ├── docker-compose.yml              # Production multi-container Docker compose
 ├── Dockerfile.backend              # Backend Docker container
@@ -129,19 +121,24 @@ agrivault/
 
 ## 📡 Hardware Protocol Specification
 
-### MQTT Topics
+### Direct MQTT Topics (Over Internet)
 | Topic Pattern | Direction | Description |
 |---|---|---|
-| `agrivault/{facilityId}/gateway/{gatewayId}/device/{deviceId}/status` | ESP → Gateway | Node identity, capabilities announcement for auto-discovery |
-| `agrivault/{facilityId}/gateway/{gatewayId}/device/{deviceId}/telemetry` | ESP → Gateway | Real-time multi-sensor readings |
-| `agrivault/{facilityId}/gateway/{gatewayId}/device/{deviceId}/command` | Gateway → ESP | Remote relay actuation (`SET_RELAY`) |
-| `agrivault/{facilityId}/gateway/{gatewayId}/device/{deviceId}/response` | ESP → Gateway | Actuation acknowledgement and state confirmation |
+| `agrivault/{facilityId}/device/{deviceId}/status` | ESP → Cloud | Node identity, capabilities announcement for auto-discovery |
+| `agrivault/{facilityId}/device/{deviceId}/telemetry` | ESP → Cloud | Real-time multi-sensor readings |
+| `agrivault/{facilityId}/device/{deviceId}/command` | Cloud → ESP | Remote relay actuation (`SET_RELAY`) |
+| `agrivault/{facilityId}/device/{deviceId}/response` | ESP → Cloud | Actuation acknowledgement and state confirmation |
+
+### Direct HTTP REST Ingest (Over Internet / WAN)
+- **Endpoint**: `POST /api/devices/telemetry`
+- **Headers**: `Content-Type: application/json`
 
 ### Telemetry JSON Schema
 ```json
 {
   "deviceId": "ESP32-A7F21",
-  "timestamp": "2026-09-23T11:45:00.000Z",
+  "hardwareType": "ESP32-DevKit-V1",
+  "timestamp": "2026-09-26T12:00:00.000Z",
   "temperature": 4.82,
   "humidity": 88.0,
   "co2": 1120,
@@ -149,13 +146,7 @@ agrivault/
   "ammonia": 1.80,
   "ethanol": 0.60,
   "battery": 3.31,
-  "rssi": -58,
-  "raw": {
-    "temperature": 4.82,
-    "mq3": 620,
-    "mq135": 780
-  },
-  "is_simulation": false
+  "rssi": -58
 }
 ```
 
@@ -163,6 +154,7 @@ agrivault/
 
 ## ⚡ Hardware Pinout Table
 
+### ESP32 (DevKit-V1 / 30-Pin / 38-Pin)
 | Sensor / Actuator | Pin | ESP32 Pin | Important Electrical Notes |
 |---|---|---|---|
 | **DS18B20 Temp Probe** | VCC | **3.3V** | Stainless waterproof probe |
@@ -177,7 +169,14 @@ agrivault/
 | **5V Relay Module** | VCC | **5V (VIN)** | Optical isolator power |
 | | GND | **GND** | Common ground |
 | | IN | **GPIO 26** | Controlled by ESP32 output logic |
-| | COM / NO | Load | Fan / Chiller override circuit |
+
+### ESP8266 (NodeMCU / Wemos D1 Mini)
+| Sensor / Actuator | Pin | ESP8266 Pin | Notes |
+|---|---|---|---|
+| **DS18B20 Temp Probe** | DATA | **D2 (GPIO 4)** | Requires 4.7kΩ pull-up resistor to 3.3V |
+| **Analog Gas Sensor** | AOUT | **A0 (ADC0)** | Analog input (0–1V / 0–3.3V) |
+| **Relay Module** | IN | **D5 (GPIO 14)** | Active HIGH |
+| **SoftAP Reset** | Button | **D3 (GPIO 0)** | Onboard FLASH button (Hold 3s) |
 
 ---
 
@@ -209,16 +208,6 @@ To prevent equipment wear and contact chatter, AgriVault enforces **deadband hys
 - **Turn OFF setpoint**: e.g., Temperature < 4.8°C (1.7°C deadband)
 - **Continuous Runtime Cutoff**: Automatically disables relays after 3,600 seconds of continuous operation to protect compressor/motor windings.
 - **Cooldown Lock**: Enforces a 300-second lock before toggling a relay again.
-
----
-
-## 🌐 Raspberry Pi Gateway (Offline Buffer & Sync)
-
-When warehouse internet drops:
-1. ESP nodes continue streaming over local Wi-Fi to the Raspberry Pi.
-2. The Gateway writes all readings to its local SQLite database (`gateway_buffer.db`).
-3. The UI indicates: *"Cloud connection unavailable — Local monitoring active"*.
-4. When cloud connectivity returns, all buffered packets are automatically uploaded in timestamp order with **zero data loss**.
 
 ---
 

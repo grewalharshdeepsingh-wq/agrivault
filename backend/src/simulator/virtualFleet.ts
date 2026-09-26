@@ -88,7 +88,7 @@ class VirtualFleetEngine {
     this.nodes.set('ESP32-E2A67', {
       deviceId: 'ESP32-E2A67',
       facilityId: 'fac-01',
-      gatewayId: 'gw-01',
+      gatewayId: 'direct',
       temp: 11.2,
       humidity: 68.0,
       co2: 560,
@@ -97,6 +97,21 @@ class VirtualFleetEngine {
       ethanol: 0.2,
       battery: 3.33,
       rssi: -52,
+      offline: false
+    });
+
+    this.nodes.set('ESP8266-C4B12', {
+      deviceId: 'ESP8266-C4B12',
+      facilityId: 'fac-01',
+      gatewayId: 'direct',
+      temp: 5.6,
+      humidity: 89.2,
+      co2: 950,
+      ethylene: 0.02,
+      ammonia: 0.9,
+      ethanol: 0.3,
+      battery: 3.28,
+      rssi: -58,
       offline: false
     });
   }
@@ -160,8 +175,8 @@ class VirtualFleetEngine {
       // Apply Scenario physics
       this.applyScenarioPhysics(node);
 
-      // Construct MQTT telemetry topic
-      const topic = `agrivault/${node.facilityId}/gateway/${node.gatewayId}/device/${node.deviceId}/telemetry`;
+      // Construct direct MQTT telemetry topic over Internet
+      const topic = `agrivault/${node.facilityId}/device/${node.deviceId}/telemetry`;
 
       // Build realistic payload
       const payload = {

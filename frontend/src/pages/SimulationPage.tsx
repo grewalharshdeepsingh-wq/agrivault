@@ -96,11 +96,11 @@ export const SimulationPage: React.FC = () => {
     },
     {
       id: 'gateway_offline',
-      title: 'Internet Blackout (Gateway Local Buffering)',
-      desc: 'Simulates complete cloud disconnect. The Raspberry Pi Gateway continues recording all readings to local SQLite buffer without data loss.',
+      title: 'WAN / Internet Connection Loss & Recovery',
+      desc: 'Simulates internet packet interruption. Once the WAN link recovers, direct telemetry streaming resumes immediately.',
       icon: HardDriveDownload,
       color: 'text-indigo-400',
-      badge: 'Offline Buffer'
+      badge: 'WAN Link Test'
     }
   ];
 

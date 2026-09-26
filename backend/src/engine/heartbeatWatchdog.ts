@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/db.js';
-import { ESPDevice, Gateway } from '../models/types.js';
+import { ESPDevice } from '../models/types.js';
 
 const HEARTBEAT_TIMEOUT_SEC = parseInt(process.env.HEARTBEAT_TIMEOUT_SECONDS || '60', 10);
 
@@ -68,7 +68,7 @@ export function checkDeviceHeartbeats(): void {
       const title = `ESP Node Offline: ${dev.user_name}`;
       const message = `${dev.user_name} (${dev.id}) has not transmitted a heartbeat for ${Math.round(elapsedSec)} seconds. Sensor telemetry from this area may be incomplete.`;
       const issue = 'Potential causes: local 2.4GHz Wi-Fi interference, breadboard/probe power loss, or hardware freeze.';
-      const action = 'Inspect ESP32 status LED on MB102 board, verify 5V power adapter, and check gateway Wi-Fi signal strength.';
+      const action = 'Inspect ESP status LED on board, verify 5V/3.3V power adapter, and check internet Wi-Fi router / WAN connectivity.';
 
       // Deduplicate alert
       const existing = db.get(
@@ -99,25 +99,6 @@ export function checkDeviceHeartbeats(): void {
           deviceId: dev.id,
           userName: dev.user_name,
           areaId: dev.area_id,
-          elapsedSeconds: Math.round(elapsedSec)
-        });
-      }
-    }
-  }
-
-  // 2. Check Gateways
-  const gateways = db.all<Gateway>('SELECT * FROM gateways');
-  for (const gw of gateways) {
-    const lastBeatMs = new Date(gw.last_heartbeat).getTime();
-    const elapsedSec = (nowMs - lastBeatMs) / 1000;
-
-    if (gw.is_online === 1 && elapsedSec > HEARTBEAT_TIMEOUT_SEC * 1.5) {
-      db.run("UPDATE gateways SET is_online = 0, status_detail = 'Offline (heartbeat timeout)' WHERE id = ?", gw.id);
-
-      if (statusBroadcastFn) {
-        statusBroadcastFn('gateway_offline', {
-          gatewayId: gw.id,
-          name: gw.name,
           elapsedSeconds: Math.round(elapsedSec)
         });
       }

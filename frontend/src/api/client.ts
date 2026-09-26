@@ -92,8 +92,11 @@ export const api = {
     request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteDevice: (id: string) =>
     request<any>(`/devices/${id}`, { method: 'DELETE' }),
-  simulateDiscovery: () =>
-    request<any>('/devices/discover/simulate', { method: 'POST' }),
+  simulateDiscovery: (hardwareType?: 'ESP32' | 'ESP8266') =>
+    request<any>('/devices/discover/simulate', {
+      method: 'POST',
+      body: JSON.stringify({ hardwareType })
+    }),
 
   // Sensors
   getSensor: (id: string) => request<any>(`/sensors/${id}`),

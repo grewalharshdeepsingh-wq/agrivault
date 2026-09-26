@@ -29,9 +29,11 @@ router.get('/health', (req: Request, res: Response): void => {
   const onlineGateways = gateways.filter(g => g.is_online === 1).length;
 
   // Devices check
-  const devices = db.all<any>('SELECT id, is_online, signal_rssi, last_heartbeat FROM esp_devices WHERE is_enabled = 1');
+  const devices = db.all<any>('SELECT id, hardware_type, is_online, signal_rssi, last_heartbeat FROM esp_devices WHERE is_enabled = 1');
   const onlineDevices = devices.filter(d => d.is_online === 1).length;
   const totalDevices = devices.length;
+  const esp32Count = devices.filter(d => (d.hardware_type || '').includes('ESP32') || d.id.includes('ESP32')).length;
+  const esp8266Count = devices.filter(d => (d.hardware_type || '').includes('ESP8266') || d.id.includes('ESP8266')).length;
 
   // Sensors check
   const sensors = db.all<any>('SELECT id, sensor_health FROM sensors');
@@ -67,16 +69,26 @@ router.get('/health', (req: Request, res: Response): void => {
         status: 'healthy',
         activeClients: wsClients
       },
+      directCloudIngest: {
+        status: 'healthy',
+        protocol: 'Direct Internet (HTTP REST & MQTT)',
+        endpoint: '/api/devices/telemetry',
+        mqttBrokerPort: 1883,
+        gatewayRequired: false
+      },
       gateway: {
-        status: onlineGateways > 0 ? 'healthy' : 'warning',
-        totalGateways: gateways.length,
-        onlineGateways,
-        details: gateways
+        status: 'retired',
+        mode: 'Direct Internet Architecture (No Gateway Required)',
+        totalGateways: 0,
+        onlineGateways: 0,
+        details: []
       },
       espDevices: {
         status: onlineDevices === totalDevices ? 'healthy' : onlineDevices > 0 ? 'warning' : 'critical',
         online: onlineDevices,
         total: totalDevices,
+        esp32Count,
+        esp8266Count,
         percentageOnline: totalDevices > 0 ? Math.round((onlineDevices / totalDevices) * 100) : 0
       },
       sensors: {

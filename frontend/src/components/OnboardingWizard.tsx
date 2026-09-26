@@ -35,8 +35,8 @@ export const OnboardingWizard: React.FC<{ isOpen: boolean; onClose: () => void }
   const steps = [
     { num: 1, title: 'Create Account', desc: 'Enterprise profile & RBAC configuration' },
     { num: 2, title: 'Create Facility', desc: 'Define warehouse & cold storage premises' },
-    { num: 3, title: 'Add Gateway', desc: 'Pair Raspberry Pi 4 Central Controller' },
-    { num: 4, title: 'Discover ESPs', desc: 'Scan local Wi-Fi mesh for sensor nodes' },
+    { num: 3, title: 'Internet Cloud Broker', desc: 'Direct Wi-Fi / WAN telemetry connection' },
+    { num: 4, title: 'Discover ESPs', desc: 'Auto-discover ESP32 & ESP8266 nodes over Internet' },
     { num: 5, title: 'Assign to Area', desc: 'Map physical hardware to storage vaults' },
     { num: 6, title: 'Rename Devices', desc: 'Assign human-readable industrial names' },
     { num: 7, title: 'Sensor Thresholds', desc: 'Configure safe environmental limits' },
@@ -45,10 +45,10 @@ export const OnboardingWizard: React.FC<{ isOpen: boolean; onClose: () => void }
     { num: 10, title: 'System Ready', desc: '24/7 continuous monitoring armed' }
   ];
 
-  const handleSimulateScan = async () => {
+  const handleSimulateScan = async (hw: 'ESP32' | 'ESP8266' = 'ESP32') => {
     setIsScanning(true);
     try {
-      const res = await api.simulateDiscovery();
+      const res = await api.simulateDiscovery(hw);
       setDiscoveredNode(res.device);
     } finally {
       setIsScanning(false);
@@ -154,18 +154,23 @@ export const OnboardingWizard: React.FC<{ isOpen: boolean; onClose: () => void }
           {/* Step 3 */}
           {currentStep === 3 && (
             <div className="space-y-4">
-              <h3 className="text-base font-bold text-white">Step 3: Connect Central Gateway</h3>
+              <h3 className="text-base font-bold text-white">Step 3: Direct Internet Cloud IoT Ingest</h3>
               <p className="text-vault-300">
-                The central Raspberry Pi acts as the on-premise local gateway, collecting data even during network blackouts.
+                AgriVault operates with a direct-to-cloud IoT architecture: ESP32 and ESP8266 sensor nodes stream telemetry directly over your standard Wi-Fi and WAN. No Raspberry Pi or local hardware gateway is required.
               </p>
               <div className="p-4 bg-vault-950 rounded-xl border border-vault-800 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-white">Gateway 01 — Raspberry Pi 4</span>
+                  <span className="font-semibold text-white">AgriVault Cloud Telemetry Broker</span>
                   <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">
-                    PAIRED & ONLINE
+                    DIRECT INTERNET READY
                   </span>
                 </div>
-                <p className="text-xs text-vault-400 font-mono">IP: 192.168.1.100 | Port: 1883 | Local Buffer: Active</p>
+                <p className="text-xs text-vault-400 font-mono">Endpoints: HTTP REST (/api/devices/telemetry) & Direct MQTT (:1883)</p>
+                <div className="flex flex-wrap gap-2 pt-1 text-[11px]">
+                  <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">ESP32 Supported</span>
+                  <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">ESP8266 Supported</span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Zero Hardware Gateway Needed</span>
+                </div>
               </div>
             </div>
           )}
@@ -173,22 +178,38 @@ export const OnboardingWizard: React.FC<{ isOpen: boolean; onClose: () => void }
           {/* Step 4 */}
           {currentStep === 4 && (
             <div className="space-y-4">
-              <h3 className="text-base font-bold text-white">Step 4: Scan & Discover ESP Nodes</h3>
+              <h3 className="text-base font-bold text-white">Step 4: Discover ESP32 & ESP8266 Nodes</h3>
               <p className="text-vault-300">
-                No manual IP typing required. AgriVault listens for MQTT discovery packets and broadcasts automatically.
+                No manual IP typing required. When an ESP connects to Wi-Fi and reaches the AgriVault server over the Internet, it is discovered automatically.
               </p>
               <div className="p-4 bg-vault-950 rounded-xl border border-vault-800 text-center space-y-3">
-                <button
-                  onClick={handleSimulateScan}
-                  disabled={isScanning}
-                  className="px-4 py-2 bg-agri-600 hover:bg-agri-500 text-white rounded-lg font-semibold text-xs transition shadow"
-                >
-                  {isScanning ? 'Scanning Wi-Fi Mesh...' : 'Scan for New ESP Nodes'}
-                </button>
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                  <button
+                    onClick={() => handleSimulateScan('ESP32')}
+                    disabled={isScanning}
+                    className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold text-xs transition shadow"
+                  >
+                    {isScanning ? 'Connecting...' : 'Connect ESP32 (Internet)'}
+                  </button>
+                  <button
+                    onClick={() => handleSimulateScan('ESP8266')}
+                    disabled={isScanning}
+                    className="w-full sm:w-auto px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-semibold text-xs transition shadow"
+                  >
+                    {isScanning ? 'Connecting...' : 'Connect ESP8266 (Internet)'}
+                  </button>
+                </div>
                 {discoveredNode && (
                   <div className="mt-3 p-3 bg-vault-900 border border-agri-500/40 rounded-lg text-left">
-                    <p className="text-xs text-agri-400 font-bold">✓ Node Discovered: {discoveredNode.id}</p>
-                    <p className="text-xs text-vault-400">IP: {discoveredNode.ip_address} | RSSI: {discoveredNode.signal_rssi} dBm</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-agri-400 font-bold">✓ Node Discovered: {discoveredNode.id}</p>
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                        (discoveredNode.hardware_type || '').includes('8266') ? 'bg-purple-500/30 text-purple-300' : 'bg-blue-500/30 text-blue-300'
+                      }`}>
+                        {discoveredNode.hardware_type || 'ESP'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-vault-400 mt-1">IP: {discoveredNode.ip_address} | Connection: Direct Internet | RSSI: {discoveredNode.signal_rssi} dBm</p>
                   </div>
                 )}
               </div>

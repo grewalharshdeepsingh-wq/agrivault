@@ -1,16 +1,21 @@
-# 🍓 AgriVault Central Gateway — Raspberry Pi Setup & Guide
+# 🍓 AgriVault Central Gateway (Legacy Reference)
 
-The AgriVault Central Gateway runs on a Raspberry Pi (RPi 3B+, 4, 5, or Compute Module) positioned inside or adjacent to the cold storage warehouse.
-
-## Key Responsibilities
-1. **Local Wi-Fi / Mesh Hub**: Communicates with ESP32 sensor nodes over a dedicated local Wi-Fi SSID (`AgriVault-Local-Mesh`).
-2. **Offline Data Buffering**: When the commercial warehouse internet connection goes down, the Gateway stores all incoming readings inside a local SQLite database (`gateway_buffer.db`).
-3. **Automatic Cloud Sync**: Once the cloud backend becomes reachable again, all buffered time-series records are automatically transmitted to the AgriVault Cloud in original chronological order.
-4. **Emergency Local Automation**: If temperatures exceed critical limits during an internet outage, the gateway triggers local relays directly without waiting for cloud authorization.
+> [!NOTE]
+> **No Raspberry Pi Gateway Required:**  
+> AgriVault now supports a **direct-to-cloud IoT architecture**. ESP32 and ESP8266 sensor nodes connect directly to your facility Wi-Fi and stream telemetry to the AgriVault server over the Internet via HTTP REST (`POST /api/devices/telemetry`) and direct MQTT (`:1883`).  
+> 
+> The Raspberry Pi gateway files in this directory are preserved strictly as an optional on-premise local buffer for fully air-gapped industrial installations.
 
 ---
 
-## 🛠️ Step-by-Step Raspberry Pi Installation
+## Historical Key Responsibilities (Optional Air-Gapped Deployments)
+1. **Local Wi-Fi / Mesh Hub**: Communicates with ESP32 sensor nodes over a dedicated local Wi-Fi SSID.
+2. **Offline Data Buffering**: When internet drops in air-gapped setups, stores incoming readings inside local SQLite (`gateway_buffer.db`).
+3. **Automatic Cloud Sync**: Once the cloud backend becomes reachable again, replays all buffered time-series records.
+
+---
+
+## 🛠️ Optional Raspberry Pi Installation (Air-Gapped Only)
 
 ### Step 1: Install Python Dependencies
 ```bash
@@ -36,6 +41,5 @@ sudo systemctl start agrivault-gateway
 ### Step 4: Check Gateway Status & Logs
 ```bash
 sudo systemctl status agrivault-gateway
-# Stream live logs:
 journalctl -u agrivault-gateway -f
 ```

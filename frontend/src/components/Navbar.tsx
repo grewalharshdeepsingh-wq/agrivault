@@ -43,7 +43,7 @@ export const Navbar: React.FC = () => {
     { id: 'gas_anomaly_ethanol', label: '🍷 Fermentation / Rot VOC' },
     { id: 'multi_anomaly', label: '⚠️ Multi-Sensor Spoilage Risk' },
     { id: 'sensor_offline', label: '📡 ESP Sensor Offline' },
-    { id: 'gateway_offline', label: '🔌 Gateway Offline (Buffering)' }
+    { id: 'esp8266_discovery', label: '🌐 Connect ESP8266 (Internet)' }
   ];
 
   return (

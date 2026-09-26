@@ -7,7 +7,30 @@ export function seedDatabase(): void {
 
   const existingOrg = db.get('SELECT id FROM organizations LIMIT 1');
   if (existingOrg) {
-    console.log('[Seed] Database already seeded. Skipping initial seeding.');
+    // Check if ESP8266 node is present; if not, add it
+    const has8266 = db.get('SELECT id FROM esp_devices WHERE id = ?', 'ESP8266-C4B12');
+    if (!has8266) {
+      console.log('[Seed] Adding available ESP8266 node...');
+      const now = new Date().toISOString();
+      db.run(
+        'INSERT OR IGNORE INTO esp_devices (id, facility_id, area_id, gateway_id, user_name, hardware_type, firmware_version, ip_address, mac_address, is_online, last_heartbeat, signal_rssi, battery_voltage, is_enabled, is_discovered, installation_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'ESP8266-C4B12', 'fac-01', null, null, 'Available ESP8266: ESP8266-C4B12', 'ESP8266-NodeMCU', '1.3.0-ota', '192.168.1.142', '5C:CF:7F:C4:B1:11',
+        1, now, -61, 3.30, 1, 1, '2026-01-15', now
+      );
+      // Add sensors
+      db.run('INSERT OR IGNORE INTO sensors (id, device_id, area_id, sensor_type, name, unit, pin, raw_reading, calibrated_reading, rate_of_change, rate_of_change_period, calibration_status, confidence_score, sensor_health, last_reading_time, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'sens-ESP8266-C4B12-temperature', 'ESP8266-C4B12', null, 'temperature', 'DS18B20 Probe', '°C', 'D2 (GPIO 4)', 5.6, 5.6, 0.1, '30 min', 'calibrated', 96.0, 'healthy', now, now
+      );
+      db.run('INSERT OR IGNORE INTO sensors (id, device_id, area_id, sensor_type, name, unit, pin, raw_reading, calibrated_reading, rate_of_change, rate_of_change_period, calibration_status, confidence_score, sensor_health, last_reading_time, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'sens-ESP8266-C4B12-humidity', 'ESP8266-C4B12', null, 'humidity', 'Humidity Sensor', '%', 'D7 (GPIO 13)', 89.2, 89.2, 0.0, '30 min', 'calibrated', 96.0, 'healthy', now, now
+      );
+      db.run('INSERT OR IGNORE INTO sensors (id, device_id, area_id, sensor_type, name, unit, pin, raw_reading, calibrated_reading, rate_of_change, rate_of_change_period, calibration_status, confidence_score, sensor_health, last_reading_time, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'sens-ESP8266-C4B12-co2', 'ESP8266-C4B12', null, 'co2', 'Analog Gas Sensor', 'ppm', 'A0 (ADC0)', 510, 910, 5, '30 min', 'calibrated', 96.0, 'healthy', now, now
+      );
+    }
+    // Also ensure gateway_id is null on all devices to reflect direct internet
+    db.run('UPDATE esp_devices SET gateway_id = NULL');
+    console.log('[Seed] Database ready with direct internet ESP32 and ESP8266 nodes.');
     return;
   }
 
@@ -170,21 +193,32 @@ export function seedDatabase(): void {
     },
     {
       id: 'ESP32-F3B78',
-      name: 'Discovered Node: ESP32-F3B78',
+      name: 'Available ESP32: ESP32-F3B78',
       area_id: null,
       hardware: 'ESP32-DevKit-V1',
       ip: '192.168.1.135',
       rssi: -68,
       battery: 3.28,
       is_online: 1,
-      is_discovered: 1 // Pending assignment wizard
+      is_discovered: 1 // Available & pending room assignment
+    },
+    {
+      id: 'ESP8266-C4B12',
+      name: 'Available ESP8266: ESP8266-C4B12',
+      area_id: null,
+      hardware: 'ESP8266-NodeMCU',
+      ip: '192.168.1.142',
+      rssi: -61,
+      battery: 3.30,
+      is_online: 1,
+      is_discovered: 1 // Available & pending room assignment
     }
   ];
 
   for (const d of devices) {
     db.run(
       'INSERT INTO esp_devices (id, facility_id, area_id, gateway_id, user_name, hardware_type, firmware_version, ip_address, mac_address, is_online, last_heartbeat, signal_rssi, battery_voltage, is_enabled, is_discovered, installation_date, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      d.id, facId, d.area_id, gwId, d.name, d.hardware, '1.2.0', d.ip, `24:0A:C4:${d.id.slice(6, 8)}:${d.id.slice(8, 10)}:11`,
+      d.id, facId, d.area_id, null, d.name, d.hardware, '1.3.0-ota', d.ip, d.id.includes('8266') ? `5C:CF:7F:${d.id.slice(8, 10)}:${d.id.slice(10, 12)}:11` : `24:0A:C4:${d.id.slice(6, 8)}:${d.id.slice(8, 10)}:11`,
       d.is_online, now, d.rssi, d.battery, 1, d.is_discovered, '2026-01-15', now
     );
   }
@@ -221,7 +255,17 @@ export function seedDatabase(): void {
     { dev: 'ESP32-E2A67', area: 'area-04', type: 'co2', name: 'MQ-135 CO2 Surrogate', unit: 'ppm', pin: 'GPIO 35', raw: 320, cal: 560, roc: 5 },
     { dev: 'ESP32-E2A67', area: 'area-04', type: 'ethylene', name: 'Electro-Chemical Ethylene Sensor', unit: 'ppm', pin: 'GPIO 33', raw: 0.01, cal: 0.01, roc: 0.00 },
     { dev: 'ESP32-E2A67', area: 'area-04', type: 'ammonia', name: 'MQ-135 Ammonia Sensor', unit: 'ppm', pin: 'GPIO 35', raw: 0.5, cal: 0.5, roc: 0.0 },
-    { dev: 'ESP32-E2A67', area: 'area-04', type: 'ethanol', name: 'MQ-3 VOC / Fermentation Sensor', unit: 'ppm', pin: 'GPIO 34', raw: 0.2, cal: 0.2, roc: 0.0 }
+    { dev: 'ESP32-E2A67', area: 'area-04', type: 'ethanol', name: 'MQ-3 VOC / Fermentation Sensor', unit: 'ppm', pin: 'GPIO 34', raw: 0.2, cal: 0.2, roc: 0.0 },
+
+    // Discovered Available ESP32-F3B78
+    { dev: 'ESP32-F3B78', area: null, type: 'temperature', name: 'DS18B20 Probe', unit: '°C', pin: 'GPIO 4', raw: 4.5, cal: 4.5, roc: 0.0 },
+    { dev: 'ESP32-F3B78', area: null, type: 'humidity', name: 'Humidity Sensor', unit: '%', pin: 'GPIO 32', raw: 87.5, cal: 87.5, roc: 0.0 },
+    { dev: 'ESP32-F3B78', area: null, type: 'co2', name: 'MQ-135 Gas Sensor', unit: 'ppm', pin: 'GPIO 35', raw: 400, cal: 720, roc: 0 },
+
+    // Discovered Available ESP8266-C4B12
+    { dev: 'ESP8266-C4B12', area: null, type: 'temperature', name: 'DS18B20 Probe', unit: '°C', pin: 'D2 (GPIO 4)', raw: 5.6, cal: 5.6, roc: 0.1 },
+    { dev: 'ESP8266-C4B12', area: null, type: 'humidity', name: 'Humidity Sensor', unit: '%', pin: 'D7 (GPIO 13)', raw: 89.2, cal: 89.2, roc: 0.0 },
+    { dev: 'ESP8266-C4B12', area: null, type: 'co2', name: 'Analog Gas Sensor', unit: 'ppm', pin: 'A0 (ADC0)', raw: 510, cal: 910, roc: 5 }
   ];
 
   for (const s of sensorConfigs) {

@@ -5,15 +5,14 @@
 #define WIFI_SSID           "AgriVault-Local-Mesh-5G"
 #define WIFI_PASSWORD       "agrivault2026"
 
-// --- AgriVault Gateway / Cloud MQTT Settings ---
-#define MQTT_BROKER_HOST    "192.168.1.100" // Central Raspberry Pi Gateway IP
+// --- AgriVault Cloud MQTT Settings (Connect directly over Internet) ---
+#define MQTT_BROKER_HOST    "192.168.1.100" // AgriVault Server IP or Domain (over Internet)
 #define MQTT_BROKER_PORT    1883
 #define MQTT_USERNAME       "agrivault_node"
 #define MQTT_PASSWORD       "node_secure_token"
 
 // --- AgriVault Multi-Tenant Hierarchy IDs ---
 #define FACILITY_ID         "fac-01"
-#define GATEWAY_ID          "gw-01"
 #define HARDWARE_TYPE       "ESP32-DevKit-V1"
 #define FIRMWARE_VERSION    "1.2.0"
 

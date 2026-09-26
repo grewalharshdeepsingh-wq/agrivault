@@ -118,15 +118,18 @@ async function bootstrap() {
     // 1. WebSocket update to frontend
     broadcast('relay_hardware_command', { deviceId, pin, state, reason });
 
-    // 2. Hardware MQTT topic: agrivault/fac-01/gateway/gw-01/device/{deviceId}/command
-    const topic = `agrivault/fac-01/gateway/gw-01/device/${deviceId}/command`;
-    publishMqtt(topic, {
+    // 2. Hardware MQTT topic: direct over internet (and legacy gateway fallback)
+    const directTopic = `agrivault/fac-01/device/${deviceId}/command`;
+    const legacyTopic = `agrivault/fac-01/gateway/gw-01/device/${deviceId}/command`;
+    const cmdPayload = {
       command: 'SET_RELAY',
       pin,
       state,
       reason,
       timestamp: new Date().toISOString()
-    });
+    };
+    publishMqtt(directTopic, cmdPayload);
+    publishMqtt(legacyTopic, cmdPayload);
   });
 
   // 3. Initialize Embedded MQTT Broker (Port 1883)

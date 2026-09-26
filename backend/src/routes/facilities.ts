@@ -37,6 +37,9 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
   const connectedESPs = devices.filter(d => d.is_online === 1 && d.is_discovered === 0).length;
   const offlineESPs = devices.filter(d => d.is_online === 0 && d.is_discovered === 0).length;
   const pendingDiscovery = devices.filter(d => d.is_discovered === 1).length;
+  const unassignedESPs = devices.filter(d => !d.area_id).length;
+  const esp32Count = devices.filter(d => (d.hardware_type || '').includes('ESP32') || d.id.includes('ESP32')).length;
+  const esp8266Count = devices.filter(d => (d.hardware_type || '').includes('ESP8266') || d.id.includes('ESP8266')).length;
 
   // 4. Alerts
   const activeAlerts = db.all<Alert>(
@@ -137,6 +140,9 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
     connectedESPs,
     offlineESPs,
     pendingDiscovery,
+    unassignedESPs,
+    esp32Count,
+    esp8266Count,
     activeAlertsCount: activeAlerts.length,
     criticalAlertsCount,
     warningAlertsCount,

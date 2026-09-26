@@ -8,9 +8,9 @@
 // ==============================================================================
 
 // Default fallback server address (can be changed anytime in SoftAP setup wizard)
+// Direct connection over Internet / LAN to AgriVault Server
 #define DEFAULT_SERVER_URL   "http://192.168.1.100:4000"
 #define DEFAULT_FACILITY_ID  "fac-01"
-#define DEFAULT_GATEWAY_ID   "gw-01"
 #define FIRMWARE_VERSION     "1.3.0-ota"
 
 // Telemetry streaming interval in milliseconds (default: every 5 seconds)
