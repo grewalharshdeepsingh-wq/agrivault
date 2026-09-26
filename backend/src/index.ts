@@ -25,6 +25,7 @@ import relayRoutes from './routes/relays.js';
 import reportRoutes from './routes/reports.js';
 import systemRoutes from './routes/system.js';
 import simulationRoutes from './routes/simulation.js';
+import analyticsRoutes from './routes/analytics.js';
 
 dotenv.config();
 
@@ -48,6 +49,7 @@ app.use('/api/thresholds', thresholdRoutes);
 app.use('/api/alerts', alertRoutes);
 app.use('/api/relays', relayRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/system', systemRoutes);
 app.use('/api/simulation', simulationRoutes);
 

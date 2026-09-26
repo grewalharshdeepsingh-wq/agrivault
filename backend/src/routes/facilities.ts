@@ -116,6 +116,7 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
 
     return {
       ...area,
+      devices: areaDevices,
       deviceCount: areaDevices.length,
       activeAlertsCount: areaAlerts.length,
       metrics: {

@@ -11,15 +11,18 @@ import {
   TrendingUp,
   Minus,
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  Cpu,
+  Edit2
 } from 'lucide-react';
 
 interface AreaCardProps {
   area: Area;
   onClick: () => void;
+  onEditArea?: (area: Area) => void;
 }
 
-export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick }) => {
+export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea }) => {
   const { metrics, health_status, health_score, health_reasons, name, commodity, deviceCount, activeAlertsCount } = area;
 
   const temp = metrics?.temperature;
@@ -82,6 +85,19 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick }) => {
               <h3 className="text-base font-bold text-white tracking-tight group-hover:text-agri-400 transition">
                 {name}
               </h3>
+              {onEditArea && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditArea(area);
+                  }}
+                  className="p-1 rounded hover:bg-vault-800 text-vault-400 hover:text-agri-300 transition"
+                  title="Configure / Rename Room or Assign ESPs"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <p className="text-xs text-vault-400 font-medium">{commodity}</p>
           </div>
@@ -99,6 +115,32 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick }) => {
               </span>
             )}
           </div>
+        </div>
+
+        {/* Assigned ESP Modules Strip */}
+        <div className="flex flex-wrap items-center gap-1.5 my-2">
+          {area.devices && area.devices.length > 0 ? (
+            area.devices.map((d: any) => (
+              <span
+                key={d.id}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border ${
+                  d.is_online
+                    ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
+                    : 'bg-rose-950/30 text-rose-300 border-rose-500/30'
+                }`}
+                title={`${d.user_name || d.id} (${d.hardware_type || 'ESP'}) - ${d.is_online ? 'Online' : 'Offline'}`}
+              >
+                <Cpu className="w-2.5 h-2.5" />
+                <span className="truncate max-w-[110px]">{d.user_name || d.id}</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${d.is_online ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+              </span>
+            ))
+          ) : (
+            <span className="text-[10px] text-vault-500 italic flex items-center gap-1">
+              <Cpu className="w-3 h-3 text-vault-600" />
+              No ESP connected to this section
+            </span>
+          )}
         </div>
 
         {/* Primary Metrics Grid */}

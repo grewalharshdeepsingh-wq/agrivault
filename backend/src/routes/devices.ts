@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/db.js';
 import { ESPDevice, Sensor } from '../models/types.js';
 import { broadcast } from '../websocket/wsServer.js';
+import { handleDeviceStatus, handleDeviceTelemetry } from '../mqtt/handlers.js';
 
 const router = Router();
 
@@ -198,6 +199,46 @@ router.post('/discover/simulate', (req: Request, res: Response): void => {
     success: true,
     message: `Discovered new ESP32 node ${newDeviceId}`,
     device: newDev
+  });
+});
+
+// POST /api/devices/telemetry
+// Direct HTTP REST ingest for ESP8266 & ESP32 modules (works seamlessly over Wi-Fi / WAN / Cloud)
+router.post('/telemetry', (req: Request, res: Response): void => {
+  const payload = req.body || {};
+  const deviceId = payload.deviceId || payload.id || req.query.deviceId;
+
+  if (!deviceId || typeof deviceId !== 'string') {
+    res.status(400).json({ error: 'Missing or invalid "deviceId" in telemetry payload' });
+    return;
+  }
+
+  const facilityId = payload.facilityId || 'fac-01';
+  const gatewayId = payload.gatewayId || 'gw-01';
+  const hardwareType = payload.hardwareType || (deviceId.toUpperCase().includes('8266') ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || payload.ip || '192.168.1.150';
+
+  // 1. Auto-discover or heartbeat device
+  handleDeviceStatus(facilityId, gatewayId, deviceId, {
+    hardwareType,
+    firmwareVersion: payload.firmwareVersion || '1.3.0-ota',
+    ipAddress: payload.ipAddress || clientIp,
+    macAddress: payload.macAddress || `MAC-${deviceId}`,
+    rssi: payload.rssi !== undefined ? Number(payload.rssi) : -60,
+    battery: payload.battery !== undefined ? Number(payload.battery) : 3.3,
+    capabilities: payload.capabilities || ['temperature', 'humidity', 'co2', 'ammonia', 'ethanol', 'relay']
+  });
+
+  // 2. Ingest sensor readings & trigger alerts/automation
+  handleDeviceTelemetry(facilityId, gatewayId, deviceId, {
+    ...payload,
+    ip: payload.ipAddress || clientIp
+  });
+
+  res.status(200).json({
+    status: 'ACK',
+    deviceId,
+    receivedAt: new Date().toISOString()
   });
 });
 

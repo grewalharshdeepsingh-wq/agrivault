@@ -16,6 +16,7 @@ import { AutomationPage } from './pages/AutomationPage';
 import { SystemHealthPage } from './pages/SystemHealthPage';
 import { SimulationPage } from './pages/SimulationPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { AnalyticsPage } from './pages/AnalyticsPage';
 import { X, Layers, Cpu, BarChart3, ToggleRight, Activity, Sliders, Settings } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -93,6 +94,8 @@ export const App: React.FC = () => {
                 )}
 
                 {currentTab === 'alerts' && <AlertsPage />}
+
+                {currentTab === 'analytics' && <AnalyticsPage />}
 
                 {currentTab === 'reports' && <ReportsPage />}
 

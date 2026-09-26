@@ -63,11 +63,24 @@ export const api = {
     request<any>('/facilities', { method: 'POST', body: JSON.stringify(data) }),
   createArea: (facilityId: string, data: { name: string; commodity: string }) =>
     request<any>(`/facilities/${facilityId}/areas`, { method: 'POST', body: JSON.stringify(data) }),
+  createAreaDirect: (data: { name: string; commodity: string; facilityId?: string; deviceIds?: string[] }) =>
+    request<any>('/areas', { method: 'POST', body: JSON.stringify(data) }),
 
   // Areas
+  getAreas: (facilityId?: string) =>
+    request<any[]>(facilityId ? `/areas?facilityId=${facilityId}` : '/areas'),
   getArea: (id: string) => request<any>(`/areas/${id}`),
   updateArea: (id: string, data: { name?: string; commodity?: string }) =>
     request<any>(`/areas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteArea: (id: string) =>
+    request<any>(`/areas/${id}`, { method: 'DELETE' }),
+
+  // Analytics & Statistics
+  getAnalyticsSummary: (period = '24h', areaId?: string) => {
+    const qs = new URLSearchParams({ period });
+    if (areaId) qs.append('areaId', areaId);
+    return request<any>(`/analytics/summary?${qs.toString()}`);
+  },
 
   // Devices
   getDevices: (params?: Record<string, string>) => {

@@ -20,6 +20,7 @@ export type NavTab =
   | 'devices'
   | 'live'
   | 'alerts'
+  | 'analytics'
   | 'reports'
   | 'automation'
   | 'system'
@@ -48,7 +49,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
 
   const navItems: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'areas', label: 'Areas / Zones', icon: Layers, count: overview?.activeAreasCount },
+    { id: 'areas', label: 'Rooms & Sections', icon: Layers, count: overview?.activeAreasCount },
+    { id: 'analytics', label: 'Analytics & Stats', icon: Activity },
     { id: 'devices', label: 'Devices & ESPs', icon: Cpu, badge: discoveredCount > 0 ? `${discoveredCount} new` : undefined, badgeColor: 'bg-indigo-500' },
     { id: 'live', label: 'Live Monitoring', icon: Radio },
     { id: 'alerts', label: 'Active Alerts', icon: AlertTriangle, count: activeAlertsCount, countColor: activeAlertsCount > 0 ? 'bg-rose-600 text-white' : undefined },

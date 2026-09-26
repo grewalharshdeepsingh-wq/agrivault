@@ -30,6 +30,7 @@ export interface Area {
   health_score: number;
   health_reasons: string[];
   created_at: string;
+  devices?: any[];
   deviceCount?: number;
   activeAlertsCount?: number;
   metrics?: {
