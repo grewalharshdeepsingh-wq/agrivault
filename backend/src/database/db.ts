@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { SCHEMA_SQL } from './schemaSql.js';
 
 dotenv.config();
 
-const DB_PATH = process.env.DATABASE_PATH || './data/agrivault.db';
+const DB_PATH = process.env.DATABASE_PATH || (process.env.VERCEL ? '/tmp/agrivault.db' : './data/agrivault.db');
 
 // Ensure directory exists
 const dir = path.dirname(path.resolve(DB_PATH));
@@ -70,8 +71,10 @@ export function initDatabase(): void {
   if (fs.existsSync(schemaPath)) {
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
     getDatabase().exec(schemaSql);
-    console.log('[Database] Schema verified and initialized successfully in WAL mode.');
+    console.log('[Database] Schema verified and initialized successfully from schema.sql.');
   } else {
-    console.warn(`[Database] Warning: schema file not found at ${schemaPath}`);
+    getDatabase().exec(SCHEMA_SQL);
+    console.log('[Database] Schema verified and initialized successfully from embedded schema.');
   }
 }
+

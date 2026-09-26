@@ -87,6 +87,12 @@ async function bootstrap() {
   initDatabase();
   seedDatabase();
 
+  // In Vercel serverless environment, background TCP broker and persistent listeners are skipped
+  if (process.env.VERCEL) {
+    console.log('[AgriVault] Running in Vercel Serverless environment.');
+    return;
+  }
+
   // 2. Initialize WebSocket Real-Time Broadcasting
   initWebSocketServer(server);
 
@@ -116,7 +122,9 @@ async function bootstrap() {
   });
 
   // 3. Initialize Embedded MQTT Broker (Port 1883)
-  await initMqttBroker(MQTT_PORT);
+  await initMqttBroker(MQTT_PORT).catch(err => {
+    console.warn('[MQTT] Broker notice:', err.message);
+  });
 
   // 4. Start Heartbeat Watchdog (Checks for dead nodes & offline triggers)
   startHeartbeatWatchdog(15000);
@@ -134,6 +142,9 @@ async function bootstrap() {
 }
 
 bootstrap().catch(err => {
-  console.error('[Bootstrap] Fatal startup error:', err);
-  process.exit(1);
+  console.error('[Bootstrap] Startup notice:', err);
 });
+
+export default app;
+export { app, server };
+
