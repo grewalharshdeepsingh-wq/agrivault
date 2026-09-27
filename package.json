@@ -1,0 +1,12 @@
+{
+  "name": "agrivault-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "build": "npm run build --prefix frontend && npm run build --prefix backend"
+  }
+}

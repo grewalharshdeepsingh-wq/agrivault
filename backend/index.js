@@ -1,43 +1,65 @@
-// AgriVault Serverless & Standalone Universal Entrypoint
-let app;
-let bootError = null;
+// AgriVault Universal Serverless Entrypoint & Diagnostics
+const diagnosticInfo = {
+  timestamp: new Date().toISOString(),
+  nodeVersion: process.version,
+  modules: {}
+};
+
+let app = null;
 
 try {
-  const mod = require('./dist/index.js');
-  app = mod.app || mod.default || mod;
-} catch (err) {
-  bootError = err;
-  console.error('[AgriVault Boot Error]', err);
-  try {
-    const express = require('express');
-    app = express();
-    app.all('*', (req, res) => {
-      res.status(500).json({
-        error: 'AgriVault Backend Module Boot Error',
-        message: bootError ? bootError.message : 'Unknown boot failure',
-        stack: bootError ? bootError.stack : null,
-        name: bootError ? bootError.name : null,
-        nodeVersion: process.version,
-        env: {
-          VERCEL: process.env.VERCEL,
-          VERCEL_ENV: process.env.VERCEL_ENV,
-          VERCEL_REGION: process.env.VERCEL_REGION
-        }
-      });
-    });
-  } catch (expressErr) {
-    // Ultimate fallback handler if even express fails to load
-    app = (req, res) => {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({
-        error: 'Fatal Boot Failure',
-        bootError: bootError ? bootError.message : null,
-        expressError: expressErr.message
-      }));
-    };
-  }
+  const express = require('express');
+  diagnosticInfo.modules.express = 'OK';
+} catch (e) {
+  diagnosticInfo.modules.express = 'FAILED: ' + (e ? e.message : String(e));
 }
 
-module.exports = app;
-module.exports.default = app;
+try {
+  const sql = require('sql.js');
+  diagnosticInfo.modules.sqlJs = 'OK';
+} catch (e) {
+  diagnosticInfo.modules.sqlJs = 'FAILED: ' + (e ? e.message : String(e));
+}
+
+try {
+  const dist = require('./dist/index.js');
+  app = dist.app || dist.default || dist;
+  diagnosticInfo.modules.distIndex = 'OK';
+} catch (e) {
+  diagnosticInfo.modules.distIndex = 'FAILED: ' + (e ? (e.stack || e.message) : String(e));
+}
+
+const serverlessHandler = (req, res) => {
+  // If request is explicitly asking for module diagnostics
+  if (req.url && req.url.includes('/api/diagnostics')) {
+    res.statusCode = 200;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({
+      status: 'DIAGNOSTICS',
+      hasApp: Boolean(app),
+      diagnosticInfo
+    }, null, 2));
+    return;
+  }
+
+  // If app is fully operational, forward request to Express
+  if (app && typeof app === 'function') {
+    return app(req, res);
+  }
+
+  // Fallback diagnostic response if app failed to load
+  res.statusCode = 500;
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify({
+    error: 'AgriVault Backend Cold Start Diagnostic Failure',
+    hasApp: false,
+    diagnosticInfo
+  }, null, 2));
+};
+
+if (app && typeof app === 'object') {
+  Object.assign(serverlessHandler, app);
+}
+
+module.exports = serverlessHandler;
+module.exports.default = serverlessHandler;
