@@ -3,15 +3,87 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "source": "/api/devices/telemetry",
+      "destination": "/api/index"
     },
     {
-      "source": "/api",
-      "destination": "/api/index.js"
+      "source": "/api/devices/(.*)",
+      "destination": "/api/index"
     },
     {
-      "source": "/(.*)",
+      "source": "/api/devices",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/facilities/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/facilities",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/areas/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/areas",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/alerts/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/alerts",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/sensors/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/sensors",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/thresholds/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/thresholds",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/relays/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/relays",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/system/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/system",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/auth/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/auth",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/api/simulation/(.*)",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
