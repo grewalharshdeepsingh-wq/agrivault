@@ -85,6 +85,8 @@ export function handleDeviceStatus(
     const hwType = payload.hardwareType || (isEsp8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
     const mac = payload.macAddress || (isEsp8266 ? '5C:CF:7F:00:00:01' : '24:0A:C4:00:00:01');
     const defaultName = `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${deviceId}`;
+    const validGw = gatewayId ? db.get('SELECT id FROM gateways WHERE id = ?', gatewayId) : null;
+    const finalGatewayId = validGw ? gatewayId : null;
 
     db.run(
       `INSERT INTO esp_devices (
@@ -95,7 +97,7 @@ export function handleDeviceStatus(
       deviceId,
       facilityId,
       null, // unassigned initially
-      gatewayId || null,
+      finalGatewayId,
       defaultName,
       hwType,
       payload.firmwareVersion || '1.3.0-ota',

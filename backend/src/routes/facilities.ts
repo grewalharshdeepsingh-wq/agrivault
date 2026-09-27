@@ -24,10 +24,22 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
 
   // 1. Areas
   const rawAreas = db.all<any>('SELECT * FROM areas WHERE facility_id = ? ORDER BY name ASC', facilityId);
-  const areas = rawAreas.map(a => ({
-    ...a,
-    health_reasons: typeof a.health_reasons === 'string' ? JSON.parse(a.health_reasons || '[]') : (a.health_reasons || [])
-  }));
+  const areas = rawAreas.map(a => {
+    let parsedReasons: string[] = [];
+    if (typeof a.health_reasons === 'string') {
+      try {
+        parsedReasons = JSON.parse(a.health_reasons || '[]');
+      } catch {
+        parsedReasons = [];
+      }
+    } else if (Array.isArray(a.health_reasons)) {
+      parsedReasons = a.health_reasons;
+    }
+    return {
+      ...a,
+      health_reasons: parsedReasons
+    };
+  });
 
   // 2. Gateway
   const gateway = db.get<Gateway>('SELECT * FROM gateways WHERE facility_id = ? LIMIT 1', facilityId);

@@ -30,6 +30,7 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
     });
 
     ws.on('message', (data: string) => {
+      ws.isAlive = true;
       try {
         const msg = JSON.parse(data.toString());
         if (msg.type === 'subscribe_facility') {
@@ -38,6 +39,8 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
           ws.subscribedAreaId = msg.areaId;
         } else if (msg.type === 'ping') {
           ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        } else if (msg.type === 'pong') {
+          ws.isAlive = true;
         }
       } catch (err) {
         // ignore malformed frame
@@ -49,7 +52,7 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
     });
 
     ws.on('error', (err) => {
-      console.warn('[WebSocket] Client error:', err.message);
+      console.warn('[WebSocket] Client notice:', err.message);
       clients.delete(ws);
     });
   });
@@ -59,13 +62,25 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
     for (const ws of clients) {
       if (!ws.isAlive) {
         clients.delete(ws);
-        ws.terminate();
+        try {
+          ws.terminate();
+        } catch {
+          // ignore
+        }
         continue;
       }
       ws.isAlive = false;
-      ws.ping();
+      try {
+        ws.ping();
+        // Also send application-level ping frame for browser/proxy compatibility
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+        }
+      } catch {
+        clients.delete(ws);
+      }
     }
-  }, 30000);
+  }, 25000);
 
   wss.on('close', () => {
     clearInterval(pingInterval);

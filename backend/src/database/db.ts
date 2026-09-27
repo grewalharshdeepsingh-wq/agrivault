@@ -14,7 +14,15 @@ export const isVercel = Boolean(
   process.env.NOW_REGION
 );
 
-const DB_PATH = process.env.DATABASE_PATH || (isVercel ? '/tmp/agrivault.db' : './data/agrivault.db');
+function getResolvedDbPath(): string {
+  if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
+  if (isVercel) return '/tmp/agrivault.db';
+  const parentData = path.resolve(process.cwd(), '../data/agrivault.db');
+  if (fs.existsSync(parentData)) return parentData;
+  return path.resolve(process.cwd(), 'data/agrivault.db');
+}
+
+const DB_PATH = getResolvedDbPath();
 
 // Ensure database directory exists safely without crashing on read-only environments
 try {

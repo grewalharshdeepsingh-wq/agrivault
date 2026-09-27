@@ -8,6 +8,8 @@ class AgriVaultWebSocketManager {
   private isConnecting = false;
   private isConnected = false;
   private statusListeners: Set<(connected: boolean) => void> = new Set();
+  private reconnectTimer: any = null;
+  private heartbeatTimer: any = null;
 
   constructor() {
     this.connect();
@@ -18,9 +20,27 @@ class AgriVaultWebSocketManager {
       return;
     }
 
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    // Safely detach previous socket if closing
+    if (this.socket) {
+      try {
+        this.socket.onopen = null;
+        this.socket.onclose = null;
+        this.socket.onerror = null;
+        this.socket.onmessage = null;
+        this.socket.close();
+      } catch {
+        // ignore
+      }
+      this.socket = null;
+    }
+
     this.isConnecting = true;
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // If running in Vite dev server (port 3000), connect to ws proxy or localhost:4000
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
     try {
@@ -32,11 +52,30 @@ class AgriVaultWebSocketManager {
         this.reconnectAttempts = 0;
         this.notifyStatus(true);
         console.log('[WebSocket] Real-time link connected to AgriVault Hub');
+
+        // Start active client heartbeat every 15s to keep link alive through proxies
+        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = setInterval(() => {
+          if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            try {
+              this.socket.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+            } catch {
+              // ignore
+            }
+          }
+        }, 15000);
       };
 
       this.socket.onmessage = (event) => {
         try {
           const packet = JSON.parse(event.data);
+          if (packet.type === 'ping') {
+            this.send('pong', { timestamp: Date.now() });
+            return;
+          }
+          if (packet.type === 'pong') {
+            return;
+          }
           if (packet.type) {
             this.emit(packet.type, packet.data);
           }
@@ -46,14 +85,18 @@ class AgriVaultWebSocketManager {
       };
 
       this.socket.onclose = () => {
+        if (this.heartbeatTimer) {
+          clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = null;
+        }
         this.isConnected = false;
         this.isConnecting = false;
         this.notifyStatus(false);
         this.scheduleReconnect();
       };
 
-      this.socket.onerror = (err) => {
-        this.socket?.close();
+      this.socket.onerror = () => {
+        // Let onclose handle the reconnection cleanly without triggering duplicate closes
       };
     } catch {
       this.scheduleReconnect();
@@ -61,9 +104,13 @@ class AgriVaultWebSocketManager {
   }
 
   private scheduleReconnect(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
     this.reconnectAttempts++;
-    const delay = Math.min(1000 * Math.pow(1.5, this.reconnectAttempts), this.maxReconnectDelay);
-    setTimeout(() => {
+    const delay = Math.min(1500 * Math.pow(1.3, Math.min(this.reconnectAttempts, 8)), this.maxReconnectDelay);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.connect();
     }, delay);
   }
