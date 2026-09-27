@@ -7,6 +7,21 @@
     "backend"
   ],
   "scripts": {
-    "build": "npm run build --prefix frontend && npm run build --prefix backend"
+    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend"
+  },
+  "dependencies": {
+    "@types/sql.js": "^1.4.11",
+    "aedes": "^0.51.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.10.4",
+    "sql.js": "^1.14.2",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
   }
 }

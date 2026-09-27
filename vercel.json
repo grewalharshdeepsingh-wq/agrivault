@@ -1,35 +1,22 @@
 {
-  "services": {
-    "frontend": {
-      "root": "frontend",
-      "framework": "vite",
-      "outputDirectory": "dist"
-    },
-    "backend": {
-      "root": "backend",
-      "framework": "express",
-      "buildCommand": "npm run build",
-      "entrypoint": "index.js"
-    }
-  },
+  "buildCommand": "npm run build",
+  "outputDirectory": "frontend/dist",
   "rewrites": [
     {
+      "source": "/api/ping",
+      "destination": "/api/ping"
+    },
+    {
       "source": "/api/(.*)",
-      "destination": {
-        "service": "backend"
-      }
+      "destination": "/api/index"
     },
     {
       "source": "/api",
-      "destination": {
-        "service": "backend"
-      }
+      "destination": "/api/index"
     },
     {
-      "source": "/(.*)",
-      "destination": {
-        "service": "frontend"
-      }
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
     }
   ]
 }
