@@ -10,6 +10,7 @@ export const isVercel = Boolean(
   process.env.VERCEL_ENV ||
   process.env.VERCEL_REGION ||
   process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
   process.env.NOW_REGION
 );
 
@@ -37,13 +38,25 @@ export interface UniversalDatabase {
 let dbInstance: UniversalDatabase | null = null;
 let initPromise: Promise<UniversalDatabase> | null = null;
 
-function saveSqlJsToFile(sqlDb: any): void {
-  try {
-    const data = sqlDb.export();
-    fs.writeFileSync(path.resolve(DB_PATH), Buffer.from(data));
-  } catch {
-    // In serverless, filesystem writes may be limited
-  }
+let isInsideTransaction = false;
+let saveTimeout: NodeJS.Timeout | null = null;
+
+function scheduleSave(sqlDb: any): void {
+  if (isInsideTransaction) return;
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      const filePath = path.resolve(DB_PATH);
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const data = sqlDb.export();
+      fs.writeFileSync(filePath, Buffer.from(data));
+    } catch {
+      // In serverless, filesystem writes may be limited
+    }
+  }, 500);
 }
 
 function ensureSchema(database: UniversalDatabase): void {
@@ -87,15 +100,21 @@ function createSqlJsWrapper(sqlDb: any): UniversalDatabase {
       const flatParams = params.length === 1 && Array.isArray(params[0]) ? params[0] : params;
       stmt.run(flatParams);
       stmt.free();
-      saveSqlJsToFile(sqlDb);
-      const res = sqlDb.exec('SELECT last_insert_rowid() as id, changes() as ch');
-      const lastInsertRowid = res[0]?.values[0]?.[0] ?? 0;
-      const changes = res[0]?.values[0]?.[1] ?? 0;
+      let lastInsertRowid = 0;
+      let changes = 0;
+      try {
+        const res = sqlDb.exec('SELECT last_insert_rowid() as id, changes() as ch');
+        lastInsertRowid = res[0]?.values[0]?.[0] ?? 0;
+        changes = res[0]?.values[0]?.[1] ?? 0;
+      } catch {
+        // ignore
+      }
+      scheduleSave(sqlDb);
       return { changes, lastInsertRowid };
     },
     exec(sql: string): void {
       sqlDb.exec(sql);
-      saveSqlJsToFile(sqlDb);
+      scheduleSave(sqlDb);
     },
     prepare(sql: string) {
       return {
@@ -105,14 +124,17 @@ function createSqlJsWrapper(sqlDb: any): UniversalDatabase {
       };
     },
     transaction<T>(fn: () => T): T {
+      isInsideTransaction = true;
       sqlDb.exec('BEGIN TRANSACTION;');
       try {
         const res = fn();
         sqlDb.exec('COMMIT;');
-        saveSqlJsToFile(sqlDb);
+        isInsideTransaction = false;
+        scheduleSave(sqlDb);
         return res;
       } catch (e) {
         sqlDb.exec('ROLLBACK;');
+        isInsideTransaction = false;
         throw e;
       }
     }
@@ -200,7 +222,18 @@ export async function initDatabase(): Promise<UniversalDatabase> {
       }
     }
 
-    const sqlDb = fileBuffer ? new SQL.Database(fileBuffer) : new SQL.Database();
+    let sqlDb: any;
+    if (fileBuffer && fileBuffer.length > 0) {
+      try {
+        sqlDb = new SQL.Database(fileBuffer);
+        sqlDb.exec('SELECT 1;');
+      } catch (err: any) {
+        console.warn('[Database] Existing database buffer incompatible or corrupted, starting fresh database:', err?.message || err);
+        sqlDb = new SQL.Database();
+      }
+    } else {
+      sqlDb = new SQL.Database();
+    }
     dbInstance = createSqlJsWrapper(sqlDb);
     console.log('[Database] Connected via portable sql.js engine.');
     ensureSchema(dbInstance);

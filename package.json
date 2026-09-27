@@ -1,0 +1,9 @@
+{
+  "name": "agrivault-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AgriVault Industrial IoT Platform",
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

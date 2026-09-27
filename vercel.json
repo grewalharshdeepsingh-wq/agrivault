@@ -8,7 +8,7 @@
     },
     "backend": {
       "root": "backend",
-      "installCommand": "npm install",
+      "installCommand": "npm install --include=dev",
       "buildCommand": "npm run build",
       "entrypoint": "index.js"
     }

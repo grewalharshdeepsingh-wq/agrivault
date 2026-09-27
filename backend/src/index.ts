@@ -37,6 +37,7 @@ export const isVercel = Boolean(
   process.env.VERCEL_ENV ||
   process.env.VERCEL_REGION ||
   process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.LAMBDA_TASK_ROOT ||
   process.env.NOW_REGION
 );
 
@@ -145,11 +146,6 @@ if (!process.env.VERCEL) {
 }
 
 async function bootstrap() {
-  // In Vercel serverless environment, background TCP broker and persistent listeners are skipped
-  if (process.env.VERCEL) {
-    console.log('[AgriVault] Running in Vercel Serverless environment.');
-    return;
-  }
 
   console.log('====================================================');
   console.log('       ❄️ AGRIvault Industrial IoT Platform');
@@ -191,31 +187,29 @@ async function bootstrap() {
     publishMqtt(legacyTopic, cmdPayload);
   });
 
-  // 3. Initialize Embedded MQTT Broker (Port 1883)
-  await initMqttBroker(MQTT_PORT).catch(err => {
-    console.warn('[MQTT] Broker notice:', err.message);
-  });
+  // 3. Initialize Embedded MQTT Broker (Port 1883) & local background engines (standalone mode)
+  if (!isVercel) {
+    await initMqttBroker(MQTT_PORT).catch(err => {
+      console.warn('[MQTT] Broker notice:', err.message);
+    });
+    startHeartbeatWatchdog(15000);
+    if (process.env.SIMULATION_ENABLED !== 'false') {
+      virtualFleet.start(3500);
+    }
+  }
 
-  // 4. Start Heartbeat Watchdog (Checks for dead nodes & offline triggers)
-  startHeartbeatWatchdog(15000);
-
-  // 5. Start HTTP & WebSocket Server
+  // 4. Start HTTP & WebSocket Server (Listens on process.env.PORT for Vercel Services / standalone)
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[HTTP/WS] AgriVault Server running at http://0.0.0.0:${PORT}`);
-    console.log(`[HTTP/WS] Real-Time WebSocket stream listening on ws://localhost:${PORT}/ws`);
-  });
-
-  // 6. Launch Simulation Engine (Virtual IoT Fleet)
-  if (process.env.SIMULATION_ENABLED !== 'false') {
-    virtualFleet.start(3500);
-  }
-}
-
-if (!isVercel) {
-  bootstrap().catch(err => {
-    console.error('[Bootstrap] Startup notice:', err);
+    if (!isVercel) {
+      console.log(`[HTTP/WS] Real-Time WebSocket stream listening on ws://localhost:${PORT}/ws`);
+    }
   });
 }
+
+bootstrap().catch(err => {
+  console.error('[Bootstrap] Startup notice:', err);
+});
 
 export default app;
 export { app, server };
