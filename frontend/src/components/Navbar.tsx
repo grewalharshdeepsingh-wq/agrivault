@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
-  const { overview, isWsConnected, isOnline, simulationStatus, setSimulationScenario, setShowOnboarding } = useApp();
+  const { overview, isWsConnected, connectionMode, isOnline, simulationStatus, setSimulationScenario, setShowOnboarding } = useApp();
   const { user, role, switchRole } = useAuth();
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showSimMenu, setShowSimMenu] = useState(false);
@@ -83,9 +83,9 @@ export const Navbar: React.FC = () => {
           {!isOnline ? (
             <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
               <WifiOff className="w-3.5 h-3.5" />
-              <span>Offline — Local Monitoring Active</span>
+              <span>Offline — Local Storage Mode</span>
             </div>
-          ) : isWsConnected ? (
+          ) : isWsConnected && connectionMode === 'websocket' ? (
             <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded bg-vault-800/80 border border-vault-700 text-vault-300 text-xs">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-agri-400 opacity-75"></span>
@@ -93,10 +93,17 @@ export const Navbar: React.FC = () => {
               </span>
               <span className="font-mono text-[11px]">TELEMETRY LIVE</span>
             </div>
+          ) : isWsConnected && connectionMode === 'http_sync' ? (
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded bg-vault-800/80 border border-vault-700 text-vault-300 text-xs">
+              <span className="relative flex h-2 w-2">
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-agri-400"></span>
+              </span>
+              <span className="font-mono text-[11px] text-agri-400">CLOUD SYNC LIVE</span>
+            </div>
           ) : (
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs">
-              <Radio className="w-3.5 h-3.5 animate-spin" />
-              <span>Reconnecting...</span>
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded bg-vault-800/60 border border-vault-700 text-vault-400 text-xs">
+              <Radio className="w-3.5 h-3.5" />
+              <span>Connecting...</span>
             </div>
           )}
 

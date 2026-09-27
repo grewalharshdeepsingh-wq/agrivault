@@ -1,7 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Facility, Alert, ESPDevice } from '../types';
 import { api } from '../api/client';
-import { wsManager } from '../api/websocket';
+import { wsManager, ConnectionMode } from '../api/websocket';
+
+function isDeepEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 interface AppContextType {
   facilityId: string;
@@ -9,6 +15,7 @@ interface AppContextType {
   overview: any | null;
   alerts: Alert[];
   isWsConnected: boolean;
+  connectionMode: ConnectionMode;
   isOnline: boolean;
   discoveredDevices: ESPDevice[];
   simulationStatus: any | null;
@@ -29,6 +36,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [overview, setOverview] = useState<any | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isWsConnected, setIsWsConnected] = useState(false);
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>('connecting');
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [discoveredDevices, setDiscoveredDevices] = useState<ESPDevice[]>([]);
   const [simulationStatus, setSimulationStatus] = useState<any | null>(null);
@@ -46,18 +54,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Monitor WebSocket status
+  // Monitor WebSocket status & connection mode
   useEffect(() => {
-    return wsManager.onStatusChange((connected) => {
+    return wsManager.onStatusChange((connected, mode) => {
       setIsWsConnected(connected);
+      setConnectionMode(mode);
     });
   }, []);
 
   const refreshOverview = useCallback(async () => {
     try {
       const data = await api.getFacilityOverview(facilityId);
-      setOverview(data);
-      if (data.facility) setFacility(data.facility);
+      setOverview((prev: any) => (isDeepEqual(prev, data) ? prev : data));
+      if (data.facility) {
+        setFacility((prev: any) => (isDeepEqual(prev, data.facility) ? prev : data.facility));
+      }
     } catch (err) {
       console.warn('[AppContext] Failed to load facility overview:', err);
     }
@@ -66,7 +77,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshAlerts = useCallback(async () => {
     try {
       const data = await api.getAlerts({ facilityId });
-      setAlerts(data);
+      setAlerts((prev) => (isDeepEqual(prev, data) ? prev : data));
     } catch (err) {
       console.warn('[AppContext] Failed to load alerts:', err);
     }
@@ -75,7 +86,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const refreshSimulation = useCallback(async () => {
     try {
       const sim = await api.getSimulationStatus();
-      setSimulationStatus(sim);
+      setSimulationStatus((prev: any) => (isDeepEqual(prev, sim) ? prev : sim));
     } catch {
       // ignore
     }
@@ -89,23 +100,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // Check if new discovered devices exist
     api.getDevices({ isDiscovered: 'true' }).then((devs) => {
-      setDiscoveredDevices(devs);
+      setDiscoveredDevices((prev) => (isDeepEqual(prev, devs) ? prev : devs));
     }).catch(() => {});
   }, [refreshOverview, refreshAlerts, refreshSimulation]);
 
-  // Polling fallback when WebSocket is not active (crucial for Vercel serverless environment)
+  // Polling fallback when WebSocket is not active or in Cloud HTTP Sync mode
   useEffect(() => {
     const pollInterval = setInterval(() => {
-      if (!isWsConnected) {
+      if (!isWsConnected || connectionMode === 'http_sync') {
         refreshOverview();
         refreshAlerts();
         api.getDevices({ isDiscovered: 'true' }).then((devs) => {
-          setDiscoveredDevices(devs);
+          setDiscoveredDevices((prev) => (isDeepEqual(prev, devs) ? prev : devs));
         }).catch(() => {});
       }
-    }, 4000);
+    }, 5000);
     return () => clearInterval(pollInterval);
-  }, [isWsConnected, refreshOverview, refreshAlerts]);
+  }, [isWsConnected, connectionMode, refreshOverview, refreshAlerts]);
 
   // Wire Real-Time WebSocket Events
   useEffect(() => {
@@ -211,6 +222,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         overview,
         alerts,
         isWsConnected,
+        connectionMode,
         isOnline,
         discoveredDevices,
         simulationStatus,

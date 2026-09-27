@@ -66,7 +66,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const fetchDevices = async () => {
     try {
       const devs = await api.getDevices();
-      setAllDevices(devs);
+      setAllDevices((prev) => (JSON.stringify(prev) === JSON.stringify(devs) ? prev : devs));
     } catch (e) {
       console.error(e);
     }
@@ -74,7 +74,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   useEffect(() => {
     fetchDevices();
-    const interval = setInterval(fetchDevices, 4000);
+    const interval = setInterval(fetchDevices, 6000);
     return () => clearInterval(interval);
   }, []);
 

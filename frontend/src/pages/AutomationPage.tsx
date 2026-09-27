@@ -41,12 +41,12 @@ export const AutomationPage: React.FC = () => {
         api.getRelays(),
         api.getAutomationRules()
       ]);
-      setRelays(rList);
-      setRules(rulesList);
+      setRelays((prev) => (JSON.stringify(prev) === JSON.stringify(rList) ? prev : rList));
+      setRules((prev) => (JSON.stringify(prev) === JSON.stringify(rulesList) ? prev : rulesList));
 
       if (rList.length > 0) {
         const acts = await api.getRelayActions(rList[0].id);
-        setActionsLog(acts);
+        setActionsLog((prev) => (JSON.stringify(prev) === JSON.stringify(acts) ? prev : acts));
       }
     } catch (e) {
       console.error(e);

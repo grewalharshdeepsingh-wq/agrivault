@@ -49,7 +49,7 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
   const loadDevices = async () => {
     try {
       const data = await api.getDevices();
-      setDevices(data);
+      setDevices((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
     } catch (e) {
       console.error(e);
     } finally {

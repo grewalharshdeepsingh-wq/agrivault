@@ -1,21 +1,39 @@
-type ListenerCallback = (data: any) => void;
+export type ConnectionMode = 'websocket' | 'http_sync' | 'connecting';
+export type ListenerCallback = (data: any) => void;
+type StatusCallback = (connected: boolean, mode: ConnectionMode) => void;
 
 class AgriVaultWebSocketManager {
   private socket: WebSocket | null = null;
   private listeners: Map<string, Set<ListenerCallback>> = new Map();
   private reconnectAttempts = 0;
-  private maxReconnectDelay = 10000;
+  private maxReconnectDelay = 12000;
   private isConnecting = false;
   private isConnected = false;
-  private statusListeners: Set<(connected: boolean) => void> = new Set();
+  private connectionMode: ConnectionMode = 'connecting';
+  private statusListeners: Set<StatusCallback> = new Set();
   private reconnectTimer: any = null;
   private heartbeatTimer: any = null;
+  private isFallbackMode = false;
 
   constructor() {
+    // If hosted on Vercel where WebSockets are not supported by serverless functions,
+    // seamlessly default to high-performance Cloud HTTP Sync mode immediately.
+    const isVercel = typeof window !== 'undefined' && window.location.hostname.includes('.vercel.app');
+    if (isVercel) {
+      console.log('[AgriVault Network] Vercel Serverless environment detected. Operating in Cloud HTTP Sync mode.');
+      this.isFallbackMode = true;
+      this.isConnected = true;
+      this.connectionMode = 'http_sync';
+      setTimeout(() => this.notifyStatus(true, 'http_sync'), 50);
+      return;
+    }
+
     this.connect();
   }
 
   public connect(): void {
+    if (this.isFallbackMode) return;
+
     if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) {
       return;
     }
@@ -40,8 +58,15 @@ class AgriVaultWebSocketManager {
     }
 
     this.isConnecting = true;
+    this.connectionMode = 'connecting';
+    this.notifyStatus(false, 'connecting');
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    // When running Vite dev server (port 3000), connect directly to backend (port 4000)
+    let wsUrl = `${protocol}//${window.location.host}/ws`;
+    if (window.location.hostname === 'localhost' && window.location.port === '3000') {
+      wsUrl = 'ws://localhost:4000/ws';
+    }
 
     try {
       this.socket = new WebSocket(wsUrl);
@@ -50,7 +75,8 @@ class AgriVaultWebSocketManager {
         this.isConnected = true;
         this.isConnecting = false;
         this.reconnectAttempts = 0;
-        this.notifyStatus(true);
+        this.connectionMode = 'websocket';
+        this.notifyStatus(true, 'websocket');
         console.log('[WebSocket] Real-time link connected to AgriVault Hub');
 
         // Start active client heartbeat every 15s to keep link alive through proxies
@@ -91,7 +117,25 @@ class AgriVaultWebSocketManager {
         }
         this.isConnected = false;
         this.isConnecting = false;
-        this.notifyStatus(false);
+
+        // If repeated failures occur (e.g. 3 attempts), gracefully fall back to HTTP sync
+        // to prevent UI jitter, flashing badges, and browser console spam.
+        if (this.reconnectAttempts >= 3) {
+          console.log('[AgriVault Network] WebSocket unavailable. Smoothly switching to Cloud HTTP Sync mode.');
+          this.isFallbackMode = true;
+          this.isConnected = true;
+          this.connectionMode = 'http_sync';
+          this.notifyStatus(true, 'http_sync');
+          // Retry WebSocket quietly once after 60 seconds
+          setTimeout(() => {
+            this.isFallbackMode = false;
+            this.reconnectAttempts = 0;
+            this.connect();
+          }, 60000);
+          return;
+        }
+
+        this.notifyStatus(false, 'connecting');
         this.scheduleReconnect();
       };
 
@@ -104,6 +148,7 @@ class AgriVaultWebSocketManager {
   }
 
   private scheduleReconnect(): void {
+    if (this.isFallbackMode) return;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
     }
@@ -127,9 +172,9 @@ class AgriVaultWebSocketManager {
     };
   }
 
-  public onStatusChange(cb: (connected: boolean) => void): () => void {
+  public onStatusChange(cb: StatusCallback): () => void {
     this.statusListeners.add(cb);
-    cb(this.isConnected);
+    cb(this.isConnected, this.connectionMode);
     return () => {
       this.statusListeners.delete(cb);
     };
@@ -148,9 +193,10 @@ class AgriVaultWebSocketManager {
     }
   }
 
-  private notifyStatus(connected: boolean): void {
+  private notifyStatus(connected: boolean, mode?: ConnectionMode): void {
+    const finalMode = mode || this.connectionMode;
     for (const cb of this.statusListeners) {
-      cb(connected);
+      cb(connected, finalMode);
     }
   }
 
@@ -162,6 +208,10 @@ class AgriVaultWebSocketManager {
 
   public getIsConnected(): boolean {
     return this.isConnected;
+  }
+
+  public getConnectionMode(): ConnectionMode {
+    return this.connectionMode;
   }
 }
 

@@ -59,13 +59,13 @@ export const AreaDetail: React.FC<AreaDetailProps> = ({ areaId, onBack, onSelect
   const loadData = async () => {
     try {
       const res = await api.getArea(areaId);
-      setData(res);
+      setData((prev: any) => (JSON.stringify(prev) === JSON.stringify(res) ? prev : res));
 
       // Find sensor ID for selected parameter
       const s = res.sensors.find((x: Sensor) => x.sensor_type === activeParam);
       if (s) {
         const hist = await api.getSensorHistory(s.id, period);
-        setHistoryData(hist.data || []);
+        setHistoryData((prev: any) => (JSON.stringify(prev) === JSON.stringify(hist.data || []) ? prev : (hist.data || [])));
       }
     } catch (e) {
       console.error(e);
@@ -350,6 +350,7 @@ export const AreaDetail: React.FC<AreaDetailProps> = ({ areaId, onBack, onSelect
                 strokeWidth={2.5}
                 dot={false}
                 activeDot={{ r: 5 }}
+                isAnimationActive={false}
               />
             </LineChart>
           </ResponsiveContainer>
