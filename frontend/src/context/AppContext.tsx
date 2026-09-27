@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { Facility, Alert, ESPDevice } from '../types';
 import { api } from '../api/client';
 import { wsManager, ConnectionMode } from '../api/websocket';
+import { stateMesh } from '../api/stateMesh';
 
 function isDeepEqual(a: any, b: any): boolean {
   if (a === b) return true;
@@ -64,13 +65,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const refreshOverview = useCallback(async () => {
     try {
-      const data = await api.getFacilityOverview(facilityId);
+      const rawData = await api.getFacilityOverview(facilityId);
+      const data = stateMesh.reconcileOverview(rawData);
       setOverview((prev: any) => (isDeepEqual(prev, data) ? prev : data));
-      if (data.facility) {
+      if (data?.facility) {
         setFacility((prev: any) => (isDeepEqual(prev, data.facility) ? prev : data.facility));
       }
       try {
-        const unassigned = await api.getDevices({ isDiscovered: 'true' });
+        const rawUnassigned = await api.getDevices({ isDiscovered: 'true' });
+        const unassigned = stateMesh.reconcileDiscovered(rawUnassigned);
         setDiscoveredDevices((prev) => (isDeepEqual(prev, unassigned) ? prev : unassigned));
       } catch {
         // ignore
@@ -105,7 +108,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshSimulation();
 
     // Check if new discovered devices exist
-    api.getDevices({ isDiscovered: 'true' }).then((devs) => {
+    api.getDevices({ isDiscovered: 'true' }).then((rawDevs) => {
+      const devs = stateMesh.reconcileDiscovered(rawDevs);
       setDiscoveredDevices((prev) => (isDeepEqual(prev, devs) ? prev : devs));
     }).catch(() => {});
   }, [refreshOverview, refreshAlerts, refreshSimulation]);
@@ -116,7 +120,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!isWsConnected || connectionMode === 'http_sync') {
         refreshOverview();
         refreshAlerts();
-        api.getDevices({ isDiscovered: 'true' }).then((devs) => {
+        api.getDevices({ isDiscovered: 'true' }).then((rawDevs) => {
+          const devs = stateMesh.reconcileDiscovered(rawDevs);
           setDiscoveredDevices((prev) => (isDeepEqual(prev, devs) ? prev : devs));
         }).catch(() => {});
       }

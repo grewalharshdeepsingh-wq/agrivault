@@ -1,3 +1,5 @@
+import { stateMesh } from './stateMesh';
+
 const API_BASE = '/api';
 
 export function getStoredToken(): string | null {
@@ -14,8 +16,11 @@ export function removeStoredToken(): void {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
+  const meshHeader = stateMesh.encodeSyncHeader();
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...(meshHeader ? { 'x-agrivault-mesh': meshHeader } : {}),
     ...(options.headers as Record<string, string> || {})
   };
 
@@ -63,17 +68,26 @@ export const api = {
     request<any>('/facilities', { method: 'POST', body: JSON.stringify(data) }),
   createArea: (facilityId: string, data: { name: string; commodity: string }) =>
     request<any>(`/facilities/${facilityId}/areas`, { method: 'POST', body: JSON.stringify(data) }),
-  createAreaDirect: (data: { name: string; commodity: string; facilityId?: string; deviceIds?: string[] }) =>
-    request<any>('/areas', { method: 'POST', body: JSON.stringify(data) }),
+  createAreaDirect: async (data: { name: string; commodity: string; facilityId?: string; deviceIds?: string[] }) => {
+    const res = await request<any>('/areas', { method: 'POST', body: JSON.stringify(data) });
+    if (res && res.id) {
+      stateMesh.recordRoomCreated(res, data.deviceIds || []);
+    }
+    return res;
+  },
 
   // Areas
   getAreas: (facilityId?: string) =>
     request<any[]>(facilityId ? `/areas?facilityId=${facilityId}` : '/areas'),
   getArea: (id: string) => request<any>(`/areas/${id}`),
-  updateArea: (id: string, data: { name?: string; commodity?: string }) =>
-    request<any>(`/areas/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteArea: (id: string) =>
-    request<any>(`/areas/${id}`, { method: 'DELETE' }),
+  updateArea: async (id: string, data: { name?: string; commodity?: string }) => {
+    stateMesh.recordRoomUpdated(id, data);
+    return request<any>(`/areas/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  deleteArea: async (id: string) => {
+    stateMesh.recordRoomDeleted(id);
+    return request<any>(`/areas/${id}`, { method: 'DELETE' });
+  },
 
   // Analytics & Statistics
   getAnalyticsSummary: (period = '24h', areaId?: string) => {
@@ -88,12 +102,22 @@ export const api = {
     return request<any[]>(`/devices${qs}`);
   },
   getDevice: (id: string) => request<any>(`/devices/${id}`),
-  updateDevice: (id: string, data: any) =>
-    request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  unassignDevice: (id: string) =>
-    request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify({ areaId: null, isDiscovered: 1 }) }),
-  deleteDevice: (id: string) =>
-    request<any>(`/devices/${id}`, { method: 'DELETE' }),
+  updateDevice: async (id: string, data: any) => {
+    if (data.areaId) {
+      stateMesh.recordDeviceAssigned(id, data.areaId);
+    } else if (data.areaId === null) {
+      stateMesh.recordDeviceUnassigned(id);
+    }
+    return request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  },
+  unassignDevice: async (id: string) => {
+    stateMesh.recordDeviceUnassigned(id);
+    return request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify({ areaId: null, isDiscovered: 1 }) });
+  },
+  deleteDevice: async (id: string) => {
+    stateMesh.recordDeviceDeleted(id);
+    return request<any>(`/devices/${id}`, { method: 'DELETE' });
+  },
   simulateDiscovery: (hardwareType?: 'ESP32' | 'ESP8266') =>
     request<any>('/devices/discover/simulate', {
       method: 'POST',

@@ -12,6 +12,7 @@ import { registerAlertBroadcast } from './engine/alertEngine.js';
 import { registerRelayDispatcher } from './engine/automationEngine.js';
 import { registerStatusBroadcast, startHeartbeatWatchdog } from './engine/heartbeatWatchdog.js';
 import { virtualFleet } from './simulator/virtualFleet.js';
+import { stateMeshMiddleware, applyStateMesh, globalMeshRooms, globalMeshAssignments } from './engine/stateMeshEngine.js';
 
 // Route handlers
 import authRoutes from './routes/auth.js';
@@ -89,11 +90,26 @@ export async function ensureDbReady(): Promise<any> {
 app.use(async (req, res, next) => {
   try {
     await ensureDbReady();
-    next();
+    stateMeshMiddleware(req, res, next);
   } catch (err: any) {
     dbReadyPromise = null; // reset on error so next request can retry
     console.error('[Database Middleware Error]', err);
     res.status(500).json({ error: 'Database initialization error', details: err?.message || String(err) });
+  }
+});
+
+// Explicit State Mesh Synchronization endpoint
+app.post(['/api/system/mesh-sync', '/system/mesh-sync'], (req, res) => {
+  try {
+    applyStateMesh(req.body);
+    res.json({
+      success: true,
+      activeRooms: globalMeshRooms.size,
+      activeAssignments: globalMeshAssignments.size,
+      syncedAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Mesh sync failed', details: err?.message || String(err) });
   }
 });
 

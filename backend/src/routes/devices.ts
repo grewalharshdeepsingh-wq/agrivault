@@ -4,6 +4,7 @@ import { db } from '../database/db.js';
 import { ESPDevice, Sensor } from '../models/types.js';
 import { broadcast } from '../websocket/wsServer.js';
 import { handleDeviceStatus, handleDeviceTelemetry } from '../mqtt/handlers.js';
+import { globalMeshAssignments } from '../engine/stateMeshEngine.js';
 
 const router = Router();
 
@@ -127,6 +128,12 @@ router.put('/:id', (req: Request, res: Response): void => {
     db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', targetAreaId, existing.id);
   }
 
+  if (targetAreaId) {
+    globalMeshAssignments.set(existing.id.toUpperCase(), targetAreaId);
+  } else {
+    globalMeshAssignments.delete(existing.id.toUpperCase());
+  }
+
   const updated = db.get<any>(
     `SELECT d.*, a.name as area_name FROM esp_devices d LEFT JOIN areas a ON d.area_id = a.id WHERE d.id = ?`,
     existing.id
@@ -147,6 +154,8 @@ router.delete('/:id', (req: Request, res: Response): void => {
   }
 
   const devId = existing.id;
+  globalMeshAssignments.delete(devId.toUpperCase());
+
   db.transaction(() => {
     db.run('DELETE FROM alert_events WHERE alert_id IN (SELECT id FROM alerts WHERE device_id = ? COLLATE NOCASE)', devId);
     db.run('DELETE FROM alerts WHERE device_id = ? COLLATE NOCASE', devId);

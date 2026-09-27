@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { AreaCard } from '../components/AreaCard';
 import { api } from '../api/client';
 import { wsManager } from '../api/websocket';
+import { stateMesh } from '../api/stateMesh';
 import { Area, ESPDevice } from '../types';
 import {
   Building2,
@@ -67,7 +68,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Load all available ESP devices for assignment
   const fetchDevices = async () => {
     try {
-      const devs = await api.getDevices();
+      const rawDevs = await api.getDevices();
+      const devs = stateMesh.reconcileDevices(rawDevs);
       setAllDevices((prev) => (JSON.stringify(prev) === JSON.stringify(devs) ? prev : devs));
     } catch (e) {
       console.error(e);
@@ -237,6 +239,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
       await Promise.all([refreshOverview(), fetchDevices()]);
     } catch (err: any) {
       alert(`Error unassigning device: ${err.message}`);
+    }
+  };
+
+  // Direct Delete / Unregister Device from Room Card
+  const handleDeleteDeviceDirect = async (deviceId: string, deviceName: string) => {
+    if (!confirm(`Are you sure you want to permanently unregister and delete "${deviceName}" (${deviceId})?`)) return;
+    try {
+      await api.deleteDevice(deviceId);
+      await Promise.all([refreshOverview(), fetchDevices()]);
+    } catch (err: any) {
+      alert(`Error deleting device: ${err.message}`);
     }
   };
 
@@ -506,6 +519,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onEditArea={() => openEditModal(area)}
               onDeleteArea={() => handleDeleteAreaDirect(area)}
               onUnassignDevice={(devId, devName) => handleUnassignDeviceDirect(devId, devName)}
+              onDeleteDevice={(devId, devName) => handleDeleteDeviceDirect(devId, devName)}
             />
           ))}
         </div>

@@ -24,6 +24,7 @@ interface AreaCardProps {
   onEditArea?: (area: Area) => void;
   onDeleteArea?: (area: Area) => void;
   onUnassignDevice?: (deviceId: string, deviceName: string) => void;
+  onDeleteDevice?: (deviceId: string, deviceName: string) => void;
 }
 
 export const AreaCard: React.FC<AreaCardProps> = ({
@@ -31,7 +32,8 @@ export const AreaCard: React.FC<AreaCardProps> = ({
   onClick,
   onEditArea,
   onDeleteArea,
-  onUnassignDevice
+  onUnassignDevice,
+  onDeleteDevice
 }) => {
   const { metrics, health_status, health_score, health_reasons, name, commodity, deviceCount, activeAlertsCount } = area;
 
@@ -178,10 +180,23 @@ export const AreaCard: React.FC<AreaCardProps> = ({
                       e.stopPropagation();
                       onUnassignDevice(d.id, d.user_name || d.id);
                     }}
-                    className="ml-0.5 text-vault-400 hover:text-rose-300 hover:bg-rose-900/40 rounded p-0.5 transition"
+                    className="ml-0.5 text-vault-400 hover:text-amber-300 hover:bg-amber-900/40 rounded p-0.5 transition"
                     title={`Unassign ${d.user_name || d.id} from this room`}
                   >
                     <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
+                {onDeleteDevice && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteDevice(d.id, d.user_name || d.id);
+                    }}
+                    className="ml-0.5 text-vault-400 hover:text-rose-300 hover:bg-rose-900/40 rounded p-0.5 transition"
+                    title={`Permanently delete and unregister ${d.user_name || d.id}`}
+                  >
+                    <Trash2 className="w-2.5 h-2.5" />
                   </button>
                 )}
               </span>

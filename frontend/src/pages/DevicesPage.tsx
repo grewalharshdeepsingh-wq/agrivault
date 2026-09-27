@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { ESPDevice, Area } from '../types';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { stateMesh } from '../api/stateMesh';
 import {
   Cpu,
   Globe,
@@ -49,7 +50,8 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
   const loadDevices = async () => {
     try {
-      const data = await api.getDevices();
+      const rawData = await api.getDevices();
+      const data = stateMesh.reconcileDevices(rawData);
       setDevices((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
     } catch (e) {
       console.error(e);

@@ -6,6 +6,7 @@ import { evaluateAutomationRules } from '../engine/automationEngine.js';
 import { calculateAreaHealthScore, MetricEvaluationInput } from '../engine/areaHealthScore.js';
 import { recordDeviceHeartbeat } from '../engine/heartbeatWatchdog.js';
 import { broadcast } from '../websocket/wsServer.js';
+import { globalMeshAssignments } from '../engine/stateMeshEngine.js';
 
 interface ParsedTopic {
   facilityId: string;
@@ -89,6 +90,9 @@ export function handleDeviceStatus(
     const validGw = gatewayId ? db.get('SELECT id FROM gateways WHERE id = ?', gatewayId) : null;
     const finalGatewayId = validGw ? gatewayId : null;
 
+    const assignedAreaId = globalMeshAssignments.get(cleanId) || null;
+    const isDiscovered = assignedAreaId ? 0 : 1;
+
     db.run(
       `INSERT INTO esp_devices (
         id, facility_id, area_id, gateway_id, user_name, hardware_type,
@@ -97,7 +101,7 @@ export function handleDeviceStatus(
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       cleanId,
       facilityId,
-      null, // unassigned initially
+      assignedAreaId,
       finalGatewayId,
       defaultName,
       hwType,
@@ -109,7 +113,7 @@ export function handleDeviceStatus(
       payload.rssi || -55,
       payload.battery || 3.3,
       1,
-      1, // marked as newly discovered
+      isDiscovered,
       now.split('T')[0],
       now
     );
@@ -131,7 +135,7 @@ export function handleDeviceStatus(
           raw_reading, calibrated_reading, rate_of_change, rate_of_change_period,
           calibration_status, confidence_score, sensor_health, last_reading_time, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        sId, cleanId, null, cap, `${cap.toUpperCase()} Sensor`, unit, pin,
+        sId, cleanId, assignedAreaId, cap, `${cap.toUpperCase()} Sensor`, unit, pin,
         0, 0, 0, '30 min', 'factory_default', 90, 'healthy', now, now
       );
     }
@@ -148,6 +152,12 @@ export function handleDeviceStatus(
   } else {
     // Existing device heartbeat update using canonical ID
     recordDeviceHeartbeat(dev.id, payload.rssi, payload.ipAddress);
+    const assignedAreaId = globalMeshAssignments.get(cleanId);
+    if (assignedAreaId && dev.area_id !== assignedAreaId) {
+      db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ? COLLATE NOCASE', assignedAreaId, dev.id);
+      db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', assignedAreaId, dev.id);
+      db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', assignedAreaId, dev.id);
+    }
   }
 }
 
@@ -168,7 +178,13 @@ export function handleDeviceTelemetry(
 
   recordDeviceHeartbeat(canonicalId, payload.rssi, payload.ip);
 
-  const areaId = dev?.area_id || null;
+  let areaId = dev?.area_id || null;
+  const assignedAreaId = globalMeshAssignments.get(cleanId);
+  if (!areaId && assignedAreaId) {
+    areaId = assignedAreaId;
+    db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ? COLLATE NOCASE', assignedAreaId, canonicalId);
+    db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', assignedAreaId, canonicalId);
+  }
   const isSimulation = payload.is_simulation ? 1 : 0;
 
   const supportedSensors = ['temperature', 'humidity', 'co2', 'ethylene', 'ammonia', 'ethanol', 'voc'];

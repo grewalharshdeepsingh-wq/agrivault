@@ -3,6 +3,7 @@ import { db } from '../database/db.js';
 import { Area, ESPDevice, Sensor, Alert, RelayDevice } from '../models/types.js';
 import { evaluateMultiSensorHealth } from '../engine/storageHealth.js';
 import { broadcast } from '../websocket/wsServer.js';
+import { globalMeshRooms, globalMeshAssignments } from '../engine/stateMeshEngine.js';
 
 const router = Router();
 
@@ -142,6 +143,14 @@ router.post('/', (req: Request, res: Response): void => {
   const initialStatus = hasDevices ? 'normal' : 'standby';
   const initialScore = hasDevices ? 100.0 : 0.0;
 
+  globalMeshRooms.set(areaId, {
+    id: areaId,
+    name: trimmedName,
+    commodity: commodity || 'General Produce',
+    facility_id: facId,
+    created_at: now
+  });
+
   db.run(
     `INSERT INTO areas (id, facility_id, name, commodity, health_status, health_score, health_reasons, created_at)
      VALUES (?, ?, ?, ?, ?, ?, '[]', ?)`,
@@ -151,6 +160,8 @@ router.post('/', (req: Request, res: Response): void => {
   // Link selected ESP devices
   if (Array.isArray(deviceIds) && deviceIds.length > 0) {
     for (const devId of deviceIds) {
+      const cleanDevId = devId.trim().toUpperCase();
+      globalMeshAssignments.set(cleanDevId, areaId);
       db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ? COLLATE NOCASE', areaId, devId);
       db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', areaId, devId);
       db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', areaId, devId);
@@ -199,6 +210,12 @@ router.put('/:id', (req: Request, res: Response): void => {
     name, commodity, areaId
   );
 
+  const existingMesh = globalMeshRooms.get(areaId);
+  if (existingMesh) {
+    if (name) existingMesh.name = String(name).trim();
+    if (commodity) existingMesh.commodity = String(commodity).trim();
+  }
+
   const updated = db.get<Area>('SELECT * FROM areas WHERE id = ?', areaId);
   broadcast('area_updated', updated);
   res.json(updated);
@@ -213,7 +230,11 @@ router.delete('/:id', (req: Request, res: Response): void => {
     return;
   }
 
+  globalMeshRooms.delete(areaId);
   const affectedDevices = db.all<any>('SELECT id FROM esp_devices WHERE area_id = ?', areaId);
+  for (const dev of affectedDevices) {
+    globalMeshAssignments.delete(dev.id.trim().toUpperCase());
+  }
 
   db.transaction(() => {
     // Unlink connected devices gracefully and return them to available discovered state
