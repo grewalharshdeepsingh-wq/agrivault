@@ -69,6 +69,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.facility) {
         setFacility((prev: any) => (isDeepEqual(prev, data.facility) ? prev : data.facility));
       }
+      try {
+        const unassigned = await api.getDevices({ isDiscovered: 'true' });
+        setDiscoveredDevices((prev) => (isDeepEqual(prev, unassigned) ? prev : unassigned));
+      } catch {
+        // ignore
+      }
     } catch (err) {
       console.warn('[AppContext] Failed to load facility overview:', err);
     }
@@ -175,11 +181,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 5. Hardware Device Discovered
     const unsubDisc = wsManager.on('device_discovered', (payload) => {
-      setDiscoveredDevices((prev) => [payload.device, ...prev]);
+      const dev = payload?.device;
+      if (dev && !dev.area_id) {
+        setDiscoveredDevices((prev) => {
+          const exists = prev.some(d => d.id === dev.id);
+          if (exists) return prev.map(d => d.id === dev.id ? dev : d);
+          return [dev, ...prev];
+        });
+      }
       refreshOverview();
     });
 
-    // 6. Device Status Change (Offline / Online)
+    // 6. Device Updated (Assigned / Renamed / Unassigned)
+    const unsubUpdate = wsManager.on('device_updated', (dev) => {
+      if (dev) {
+        setDiscoveredDevices((prev) => {
+          if (dev.area_id) {
+            // If device is assigned to a room, remove from discovered available list
+            return prev.filter(d => d.id !== dev.id);
+          }
+          // If unassigned, ensure it appears in available list
+          const exists = prev.some(d => d.id === dev.id);
+          if (exists) return prev.map(d => d.id === dev.id ? dev : d);
+          return [dev, ...prev];
+        });
+      }
+      refreshOverview();
+    });
+
+    // 7. Device Deleted
+    const unsubDelete = wsManager.on('device_deleted', (payload) => {
+      if (payload?.deviceId) {
+        setDiscoveredDevices((prev) => prev.filter(d => d.id !== payload.deviceId));
+      }
+      refreshOverview();
+    });
+
+    // 8. Room / Area Changes
+    const unsubAreaDel = wsManager.on('area_deleted', () => {
+      refreshOverview();
+    });
+    const unsubAreaCreate = wsManager.on('area_created', () => {
+      refreshOverview();
+    });
+
+    // 9. Device Status Change (Offline / Online)
     const unsubOffline = wsManager.on('device_offline', () => {
       refreshOverview();
     });
@@ -193,6 +239,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubResolved();
       unsubAck();
       unsubDisc();
+      unsubUpdate();
+      unsubDelete();
+      unsubAreaDel();
+      unsubAreaCreate();
       unsubOffline();
       unsubOnline();
     };

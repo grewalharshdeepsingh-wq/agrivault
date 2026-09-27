@@ -151,9 +151,9 @@ router.post('/', (req: Request, res: Response): void => {
   // Link selected ESP devices
   if (Array.isArray(deviceIds) && deviceIds.length > 0) {
     for (const devId of deviceIds) {
-      db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ?', areaId, devId);
-      db.run('UPDATE sensors SET area_id = ? WHERE device_id = ?', areaId, devId);
-      db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ?', areaId, devId);
+      db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ? COLLATE NOCASE', areaId, devId);
+      db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', areaId, devId);
+      db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', areaId, devId);
     }
   }
 
@@ -202,8 +202,8 @@ router.delete('/:id', (req: Request, res: Response): void => {
   }
 
   db.transaction(() => {
-    // Unlink connected devices gracefully instead of destroying hardware rows
-    db.run('UPDATE esp_devices SET area_id = NULL WHERE area_id = ?', areaId);
+    // Unlink connected devices gracefully and return them to available discovered state
+    db.run('UPDATE esp_devices SET area_id = NULL, is_discovered = 1 WHERE area_id = ?', areaId);
     db.run('UPDATE sensors SET area_id = NULL WHERE area_id = ?', areaId);
     db.run('UPDATE relay_devices SET area_id = NULL WHERE area_id = ?', areaId);
     db.run('DELETE FROM sensor_readings WHERE area_id = ?', areaId);

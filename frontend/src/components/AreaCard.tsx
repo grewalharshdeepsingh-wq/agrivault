@@ -13,16 +13,26 @@ import {
   ArrowRight,
   ShieldAlert,
   Cpu,
-  Edit2
+  Edit2,
+  Trash2,
+  X
 } from 'lucide-react';
 
 interface AreaCardProps {
   area: Area;
   onClick: () => void;
   onEditArea?: (area: Area) => void;
+  onDeleteArea?: (area: Area) => void;
+  onUnassignDevice?: (deviceId: string, deviceName: string) => void;
 }
 
-export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea }) => {
+export const AreaCard: React.FC<AreaCardProps> = ({
+  area,
+  onClick,
+  onEditArea,
+  onDeleteArea,
+  onUnassignDevice
+}) => {
   const { metrics, health_status, health_score, health_reasons, name, commodity, deviceCount, activeAlertsCount } = area;
 
   const temp = metrics?.temperature;
@@ -113,6 +123,19 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
               )}
+              {onDeleteArea && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteArea(area);
+                  }}
+                  className="p-1 rounded hover:bg-rose-950/60 text-vault-400 hover:text-rose-400 transition"
+                  title={`Delete room "${name}"`}
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
             <p className="text-xs text-vault-400 font-medium">{commodity}</p>
           </div>
@@ -138,7 +161,7 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
             area.devices.map((d: any) => (
               <span
                 key={d.id}
-                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border ${
+                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-mono border ${
                   d.is_online
                     ? 'bg-emerald-950/40 text-emerald-300 border-emerald-500/30'
                     : 'bg-rose-950/30 text-rose-300 border-rose-500/30'
@@ -146,8 +169,21 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
                 title={`${d.user_name || d.id} (${d.hardware_type || 'ESP'}) - ${d.is_online ? 'Online' : 'Offline'}`}
               >
                 <Cpu className="w-2.5 h-2.5" />
-                <span className="truncate max-w-[110px]">{d.user_name || d.id}</span>
+                <span className="truncate max-w-[100px]">{d.user_name || d.id}</span>
                 <span className={`w-1.5 h-1.5 rounded-full ${d.is_online ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                {onUnassignDevice && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnassignDevice(d.id, d.user_name || d.id);
+                    }}
+                    className="ml-0.5 text-vault-400 hover:text-rose-300 hover:bg-rose-900/40 rounded p-0.5 transition"
+                    title={`Unassign ${d.user_name || d.id} from this room`}
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                )}
               </span>
             ))
           ) : (

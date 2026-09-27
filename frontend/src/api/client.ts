@@ -90,6 +90,8 @@ export const api = {
   getDevice: (id: string) => request<any>(`/devices/${id}`),
   updateDevice: (id: string, data: any) =>
     request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  unassignDevice: (id: string) =>
+    request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify({ areaId: null, isDiscovered: 1 }) }),
   deleteDevice: (id: string) =>
     request<any>(`/devices/${id}`, { method: 'DELETE' }),
   simulateDiscovery: (hardwareType?: 'ESP32' | 'ESP8266') =>

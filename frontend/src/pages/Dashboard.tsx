@@ -139,7 +139,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         if (isSelected && !wasInThisRoom) {
           await api.updateDevice(dev.id, { areaId: editingRoom.id, isDiscovered: 0 });
         } else if (!isSelected && wasInThisRoom) {
-          await api.updateDevice(dev.id, { areaId: null });
+          await api.updateDevice(dev.id, { areaId: null, isDiscovered: 1 });
         }
       }
 
@@ -153,7 +153,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  // Handle Delete Room
+  // Handle Delete Room from Modal
   const handleDeleteRoom = async () => {
     if (!editingRoom) return;
     if (!confirm(`Are you sure you want to remove room "${editingRoom.name}"? Connected ESP devices will remain registered and unassigned.`)) return;
@@ -171,6 +171,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  // Direct Delete Room from Card
+  const handleDeleteAreaDirect = async (area: Area) => {
+    if (!confirm(`Are you sure you want to delete room "${area.name}"? Attached ESP devices will safely unassign and return to the available fleet.`)) return;
+    try {
+      await api.deleteArea(area.id);
+      await refreshOverview();
+      await fetchDevices();
+    } catch (err: any) {
+      alert(`Error deleting room: ${err.message}`);
+    }
+  };
+
+  // Direct Unassign Device from Room Card
+  const handleUnassignDeviceDirect = async (deviceId: string, deviceName: string) => {
+    if (!confirm(`Unassign "${deviceName}" from this room? It will return to the available fleet.`)) return;
+    try {
+      await api.unassignDevice(deviceId);
+      await refreshOverview();
+      await fetchDevices();
+    } catch (err: any) {
+      alert(`Error unassigning device: ${err.message}`);
+    }
+  };
+
   // Toggle device selection
   const toggleDeviceSelection = (deviceId: string) => {
     setSelectedDeviceIds(prev =>
@@ -178,7 +202,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     );
   };
 
-  const pendingDiscoveredESPs = allDevices.filter(d => d.is_discovered === 1 || !d.area_id);
+  // Unassigned available ESP devices
+  const pendingDiscoveredESPs = allDevices.filter(d => !d.area_id);
 
   return (
     <div className="space-y-6">
@@ -434,6 +459,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               area={area}
               onClick={() => onSelectArea(area.id)}
               onEditArea={() => openEditModal(area)}
+              onDeleteArea={() => handleDeleteAreaDirect(area)}
+              onUnassignDevice={(devId, devName) => handleUnassignDeviceDirect(devId, devName)}
             />
           ))}
         </div>

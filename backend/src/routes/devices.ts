@@ -87,35 +87,49 @@ router.put('/:id', (req: Request, res: Response): void => {
   const deviceId = req.params.id;
   const { userName, areaId, isEnabled, isDiscovered } = req.body;
 
-  const existing = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
+  const existing = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
   if (!existing) {
     res.status(404).json({ error: 'Device not found' });
     return;
   }
+
+  // Determine targetDiscovered:
+  // If explicitly specified in body, use it.
+  // Else if areaId is being assigned to a non-null valid string, mark discovered = 0 (assigned to room).
+  // Else if areaId is explicitly being cleared to null, mark discovered = 1 (available for assignment).
+  // Else keep existing.
+  let targetDiscovered = existing.is_discovered;
+  if (isDiscovered !== undefined) {
+    targetDiscovered = isDiscovered ? 1 : 0;
+  } else if (areaId !== undefined) {
+    targetDiscovered = (areaId && typeof areaId === 'string' && areaId.trim().length > 0) ? 0 : 1;
+  }
+
+  const targetAreaId = areaId !== undefined ? (areaId && typeof areaId === 'string' && areaId.trim().length > 0 ? areaId.trim() : null) : existing.area_id;
 
   db.run(
     `UPDATE esp_devices SET
       user_name = COALESCE(?, user_name),
       area_id = ?,
       is_enabled = COALESCE(?, is_enabled),
-      is_discovered = COALESCE(?, is_discovered)
+      is_discovered = ?
     WHERE id = ?`,
     userName !== undefined ? userName : null,
-    areaId !== undefined ? areaId : existing.area_id,
+    targetAreaId,
     isEnabled !== undefined ? (isEnabled ? 1 : 0) : null,
-    isDiscovered !== undefined ? (isDiscovered ? 1 : 0) : null,
-    deviceId
+    targetDiscovered,
+    existing.id
   );
 
-  // If area changed, propagate areaId to all its attached sensors
-  if (areaId !== undefined && areaId !== existing.area_id) {
-    db.run('UPDATE sensors SET area_id = ? WHERE device_id = ?', areaId, deviceId);
-    db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ?', areaId, deviceId);
+  // If area changed, propagate areaId to all its attached sensors and relays
+  if (areaId !== undefined && targetAreaId !== existing.area_id) {
+    db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', targetAreaId, existing.id);
+    db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', targetAreaId, existing.id);
   }
 
   const updated = db.get<any>(
     `SELECT d.*, a.name as area_name FROM esp_devices d LEFT JOIN areas a ON d.area_id = a.id WHERE d.id = ?`,
-    deviceId
+    existing.id
   );
 
   broadcast('device_updated', updated);
@@ -126,23 +140,24 @@ router.put('/:id', (req: Request, res: Response): void => {
 router.delete('/:id', (req: Request, res: Response): void => {
   const deviceId = req.params.id;
 
-  const existing = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
+  const existing = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
   if (!existing) {
     res.status(404).json({ error: 'Device not found' });
     return;
   }
 
+  const devId = existing.id;
   db.transaction(() => {
-    db.run('DELETE FROM alert_events WHERE alert_id IN (SELECT id FROM alerts WHERE device_id = ?)', deviceId);
-    db.run('DELETE FROM alerts WHERE device_id = ?', deviceId);
-    db.run('DELETE FROM sensor_readings WHERE device_id = ?', deviceId);
-    db.run('DELETE FROM relay_devices WHERE device_id = ?', deviceId);
-    db.run('DELETE FROM sensors WHERE device_id = ?', deviceId);
-    db.run('DELETE FROM esp_devices WHERE id = ?', deviceId);
+    db.run('DELETE FROM alert_events WHERE alert_id IN (SELECT id FROM alerts WHERE device_id = ? COLLATE NOCASE)', devId);
+    db.run('DELETE FROM alerts WHERE device_id = ? COLLATE NOCASE', devId);
+    db.run('DELETE FROM sensor_readings WHERE device_id = ? COLLATE NOCASE', devId);
+    db.run('DELETE FROM relay_devices WHERE device_id = ? COLLATE NOCASE', devId);
+    db.run('DELETE FROM sensors WHERE device_id = ? COLLATE NOCASE', devId);
+    db.run('DELETE FROM esp_devices WHERE id = ? COLLATE NOCASE', devId);
   });
 
-  broadcast('device_deleted', { deviceId });
-  res.json({ success: true, message: `Device ${deviceId} removed successfully` });
+  broadcast('device_deleted', { deviceId: devId });
+  res.json({ success: true, message: `Device ${devId} removed successfully` });
 });
 
 // POST /api/devices/discover/simulate
@@ -219,16 +234,17 @@ router.post('/discover/simulate', (req: Request, res: Response): void => {
 // Direct HTTP REST ingest for ESP8266 & ESP32 modules (works seamlessly over Wi-Fi / WAN / Internet Cloud)
 router.post('/telemetry', (req: Request, res: Response): void => {
   const payload = req.body || {};
-  const deviceId = payload.deviceId || payload.id || req.query.deviceId;
+  const rawDeviceId = payload.deviceId || payload.id || req.query.deviceId;
 
-  if (!deviceId || typeof deviceId !== 'string') {
+  if (!rawDeviceId || typeof rawDeviceId !== 'string') {
     res.status(400).json({ error: 'Missing or invalid "deviceId" in telemetry payload' });
     return;
   }
 
+  const deviceId = rawDeviceId.trim().toUpperCase();
   const facilityId = payload.facilityId || 'fac-01';
   const gatewayId = null; // Direct Internet connection, no gateway required
-  const isEsp8266 = deviceId.toUpperCase().includes('8266') || (payload.hardwareType && payload.hardwareType.toUpperCase().includes('8266'));
+  const isEsp8266 = deviceId.includes('8266') || (payload.hardwareType && String(payload.hardwareType).toUpperCase().includes('8266'));
   const hardwareType = payload.hardwareType || (isEsp8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
   const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || payload.ip || '192.168.1.150';
 
@@ -246,6 +262,7 @@ router.post('/telemetry', (req: Request, res: Response): void => {
   // 2. Ingest sensor readings & trigger alerts/automation
   handleDeviceTelemetry(facilityId, gatewayId, deviceId, {
     ...payload,
+    deviceId,
     ip: payload.ipAddress || clientIp
   });
 

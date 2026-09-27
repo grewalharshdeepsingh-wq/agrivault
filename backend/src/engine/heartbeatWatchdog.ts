@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/db.js';
 import { ESPDevice } from '../models/types.js';
 
-const HEARTBEAT_TIMEOUT_SEC = parseInt(process.env.HEARTBEAT_TIMEOUT_SECONDS || '60', 10);
+const HEARTBEAT_TIMEOUT_SEC = parseInt(process.env.HEARTBEAT_TIMEOUT_SECONDS || '90', 10);
 
 type DeviceStatusBroadcastFn = (event: string, payload: any) => void;
 let statusBroadcastFn: DeviceStatusBroadcastFn | null = null;
@@ -17,26 +17,27 @@ export function registerStatusBroadcast(fn: DeviceStatusBroadcastFn): void {
  */
 export function recordDeviceHeartbeat(deviceId: string, rssi?: number, ip?: string): void {
   const now = new Date().toISOString();
-  const dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
+  const cleanId = deviceId.trim().toUpperCase();
+  const dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
   if (!dev) return;
 
   const wasOffline = dev.is_online === 0;
 
   db.run(
-    'UPDATE esp_devices SET is_online = 1, last_heartbeat = ?, signal_rssi = COALESCE(?, signal_rssi), ip_address = COALESCE(?, ip_address) WHERE id = ?',
-    now, rssi ?? null, ip ?? null, deviceId
+    'UPDATE esp_devices SET is_online = 1, last_heartbeat = ?, signal_rssi = COALESCE(?, signal_rssi), ip_address = COALESCE(?, ip_address) WHERE id = ? COLLATE NOCASE',
+    now, rssi ?? null, ip ?? null, dev.id
   );
 
   // If restored from offline, resolve offline alert and notify UI
   if (wasOffline) {
     db.run(
-      "UPDATE alerts SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE device_id = ? AND parameter = 'connectivity' AND status IN ('active', 'acknowledged')",
-      now, now, deviceId
+      "UPDATE alerts SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE device_id = ? COLLATE NOCASE AND parameter = 'connectivity' AND status IN ('active', 'acknowledged')",
+      now, now, dev.id
     );
 
     if (statusBroadcastFn) {
       statusBroadcastFn('device_online', {
-        deviceId,
+        deviceId: dev.id,
         userName: dev.user_name,
         areaId: dev.area_id,
         lastHeartbeat: now

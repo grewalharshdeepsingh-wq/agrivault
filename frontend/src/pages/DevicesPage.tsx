@@ -23,7 +23,8 @@ import {
   X,
   ExternalLink,
   Layers,
-  Check
+  Check,
+  Unlink
 } from 'lucide-react';
 
 export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = ({ onSelectDevice }) => {
@@ -82,13 +83,24 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       await api.updateDevice(editingDevice.id, {
         userName: editName,
         areaId: editAreaId || null,
-        isDiscovered: 0 // Mark accepted
+        isDiscovered: editAreaId ? 0 : 1
       });
       setEditingDevice(null);
       await loadDevices();
       await refreshOverview();
     } catch (err: any) {
       alert(`Failed to update device: ${err.message}`);
+    }
+  };
+
+  const handleUnassignDevice = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to unassign "${name}" from its room? It will return to the available fleet.`)) return;
+    try {
+      await api.unassignDevice(id);
+      await loadDevices();
+      await refreshOverview();
+    } catch (err: any) {
+      alert(`Failed to unassign device: ${err.message}`);
     }
   };
 
@@ -126,7 +138,7 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       (hardwareFilter === 'esp8266' && is8266(d)) ||
       (hardwareFilter === 'esp32' && !is8266(d));
 
-    const isAvailable = !d.area_id || d.is_discovered === 1;
+    const isAvailable = !d.area_id;
     const matchesAvailability =
       availabilityFilter === 'all' ||
       (availabilityFilter === 'available' && isAvailable) ||
@@ -135,7 +147,7 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
     return matchesSearch && matchesStatus && matchesHardware && matchesAvailability;
   });
 
-  const availableDevices = devices.filter((d) => !d.area_id || d.is_discovered === 1);
+  const availableDevices = devices.filter((d) => !d.area_id);
   const esp32Count = devices.filter((d) => !is8266(d)).length;
   const esp8266Count = devices.filter((d) => is8266(d)).length;
 
@@ -485,6 +497,15 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
                 {canEdit && (
                   <div className="flex items-center gap-1.5">
+                    {d.area_id && (
+                      <button
+                        onClick={() => handleUnassignDevice(d.id, d.user_name)}
+                        className="p-1.5 rounded bg-vault-800 hover:bg-amber-900/40 text-vault-400 hover:text-amber-300 transition"
+                        title={`Unassign from ${d.area_name || 'Room'}`}
+                      >
+                        <Unlink className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                     <button
                       onClick={() => {
                         setEditingDevice(d);

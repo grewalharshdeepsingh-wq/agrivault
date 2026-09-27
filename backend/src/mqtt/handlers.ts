@@ -77,14 +77,15 @@ export function handleDeviceStatus(
   }
 ): void {
   const now = new Date().toISOString();
-  let dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
+  const cleanId = deviceId.trim().toUpperCase();
+  let dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
 
   if (!dev) {
     // 1. AUTO-DISCOVER NEW DEVICE OVER INTERNET!
-    const isEsp8266 = deviceId.toUpperCase().includes('8266') || (payload.hardwareType && payload.hardwareType.toUpperCase().includes('8266'));
+    const isEsp8266 = cleanId.includes('8266') || (payload.hardwareType && payload.hardwareType.toUpperCase().includes('8266'));
     const hwType = payload.hardwareType || (isEsp8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
-    const mac = payload.macAddress || (isEsp8266 ? '5C:CF:7F:00:00:01' : '24:0A:C4:00:00:01');
-    const defaultName = `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${deviceId}`;
+    const mac = payload.macAddress || (isEsp8266 ? `5C:CF:7F:00:00:01` : `24:0A:C4:00:00:01`);
+    const defaultName = `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${cleanId}`;
     const validGw = gatewayId ? db.get('SELECT id FROM gateways WHERE id = ?', gatewayId) : null;
     const finalGatewayId = validGw ? gatewayId : null;
 
@@ -94,7 +95,7 @@ export function handleDeviceStatus(
         firmware_version, ip_address, mac_address, is_online, last_heartbeat,
         signal_rssi, battery_voltage, is_enabled, is_discovered, installation_date, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      deviceId,
+      cleanId,
       facilityId,
       null, // unassigned initially
       finalGatewayId,
@@ -117,7 +118,7 @@ export function handleDeviceStatus(
     const caps = payload.capabilities || ['temperature', 'humidity', 'co2', 'ammonia', 'ethanol'];
     for (const cap of caps) {
       if (cap === 'relay') continue;
-      const sId = `sens-${deviceId}-${cap}`;
+      const sId = `sens-${cleanId}-${cap}`;
       let unit = 'ppm';
       let pin = isEsp8266 ? 'D1 (GPIO 5)' : 'GPIO 35';
       if (cap === 'temperature') { unit = '°C'; pin = isEsp8266 ? 'D2 (GPIO 4)' : 'GPIO 4'; }
@@ -130,23 +131,23 @@ export function handleDeviceStatus(
           raw_reading, calibrated_reading, rate_of_change, rate_of_change_period,
           calibration_status, confidence_score, sensor_health, last_reading_time, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        sId, deviceId, null, cap, `${cap.toUpperCase()} Sensor`, unit, pin,
+        sId, cleanId, null, cap, `${cap.toUpperCase()} Sensor`, unit, pin,
         0, 0, 0, '30 min', 'factory_default', 90, 'healthy', now, now
       );
     }
 
-    dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
+    dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
 
     // Broadcast newly discovered device to UI
     broadcast('device_discovered', {
       device: dev,
       capabilities: caps,
-      message: `New ${isEsp8266 ? 'ESP8266' : 'ESP32'} node ${deviceId} connected directly over Internet!`
+      message: `New ${isEsp8266 ? 'ESP8266' : 'ESP32'} node ${cleanId} connected directly over Internet!`
     });
-    console.log(`[Discovery] Auto-registered new ${isEsp8266 ? 'ESP8266' : 'ESP32'} sensor node: ${deviceId} (Direct Internet)`);
+    console.log(`[Discovery] Auto-registered new ${isEsp8266 ? 'ESP8266' : 'ESP32'} sensor node: ${cleanId} (Direct Internet)`);
   } else {
-    // Existing device heartbeat update
-    recordDeviceHeartbeat(deviceId, payload.rssi, payload.ipAddress);
+    // Existing device heartbeat update using canonical ID
+    recordDeviceHeartbeat(dev.id, payload.rssi, payload.ipAddress);
   }
 }
 
@@ -161,9 +162,12 @@ export function handleDeviceTelemetry(
   payload: Record<string, any>
 ): void {
   const now = new Date().toISOString();
-  recordDeviceHeartbeat(deviceId, payload.rssi, payload.ip);
+  const cleanId = deviceId.trim().toUpperCase();
+  const dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
+  const canonicalId = dev ? dev.id : cleanId;
 
-  const dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ?', deviceId);
+  recordDeviceHeartbeat(canonicalId, payload.rssi, payload.ip);
+
   const areaId = dev?.area_id || null;
   const isSimulation = payload.is_simulation ? 1 : 0;
 
@@ -175,7 +179,7 @@ export function handleDeviceTelemetry(
       const val = parseFloat(payload[param]);
       if (isNaN(val)) continue;
 
-      const sensorId = `sens-${deviceId}-${param}`;
+      const sensorId = `sens-${canonicalId}-${param}`;
       const rawVal = payload.raw?.[param] !== undefined ? parseFloat(payload.raw[param]) : val;
 
       // Fetch previous reading to calculate Rate of Change
@@ -205,7 +209,7 @@ export function handleDeviceTelemetry(
             raw_reading, calibrated_reading, rate_of_change, rate_of_change_period,
             calibration_status, confidence_score, sensor_health, last_reading_time, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          sensorId, deviceId, areaId, param, `${param.toUpperCase()} Probe`, unit, 'GPIO',
+          sensorId, canonicalId, areaId, param, `${param.toUpperCase()} Probe`, unit, 'GPIO',
           rawVal, val, roc, '30 min', 'calibrated', 95.0, 'healthy', now, now
         );
       }
@@ -215,7 +219,7 @@ export function handleDeviceTelemetry(
         `INSERT INTO sensor_readings (
           id, sensor_id, device_id, area_id, sensor_type, raw_value, calibrated_value, unit, is_simulation, recorded_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        uuidv4(), sensorId, deviceId, areaId, param, rawVal, val, prevSensor?.unit || 'ppm', isSimulation, now
+        uuidv4(), sensorId, canonicalId, areaId, param, rawVal, val, prevSensor?.unit || 'ppm', isSimulation, now
       );
 
       // Evaluate Thresholds & Alerts
