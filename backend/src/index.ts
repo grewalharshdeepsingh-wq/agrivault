@@ -53,6 +53,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// Ensure database is initialized before any route handling (crucial for Vercel serverless cold-starts)
+app.use(async (req, res, next) => {
+  try {
+    await initDatabase();
+    next();
+  } catch (err: any) {
+    console.error('[Database Middleware Error]', err);
+    res.status(500).json({ error: 'Database initialization error', details: err?.message || String(err) });
+  }
+});
+
 // API Routes (Mounted on both /api/* and root /* for Vercel Service rewrite resilience)
 const apiRoutes: [string, any][] = [
   ['/auth', authRoutes],
@@ -113,7 +124,7 @@ async function bootstrap() {
   console.log('====================================================');
 
   // 1. Initialize persistent Database
-  initDatabase();
+  await initDatabase();
   seedDatabase();
 
   // In Vercel serverless environment, background TCP broker and persistent listeners are skipped

@@ -13,6 +13,7 @@
     "seed": "tsx src/database/seed.ts"
   },
   "dependencies": {
+    "@types/sql.js": "^1.4.11",
     "aedes": "^0.51.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -20,6 +21,7 @@
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "mqtt": "^5.10.4",
+    "sql.js": "^1.14.2",
     "uuid": "^10.0.0",
     "ws": "^8.18.0"
   },
