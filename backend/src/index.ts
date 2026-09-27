@@ -151,6 +151,10 @@ if (!process.env.VERCEL) {
 }
 
 async function bootstrap() {
+  if (isVercel) {
+    // On Vercel serverless functions, database initialization is handled on-demand in middleware
+    return;
+  }
 
   console.log('====================================================');
   console.log('       ❄️ AGRIvault Industrial IoT Platform');

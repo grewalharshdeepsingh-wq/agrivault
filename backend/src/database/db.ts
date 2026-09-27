@@ -60,12 +60,9 @@ let dbInstance: UniversalDatabase | null = null;
 let initPromise: Promise<UniversalDatabase> | null = null;
 
 let isInsideTransaction = false;
-let saveTimeout: NodeJS.Timeout | null = null;
-
 function scheduleSave(sqlDb: any): void {
   if (isInsideTransaction) return;
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
+  if (isVercel) {
     try {
       const filePath = path.resolve(DB_PATH);
       const dir = path.dirname(filePath);
@@ -77,7 +74,23 @@ function scheduleSave(sqlDb: any): void {
     } catch {
       // In serverless, filesystem writes may be limited
     }
-  }, 500);
+    return;
+  }
+
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      const filePath = path.resolve(DB_PATH);
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      const data = sqlDb.export();
+      fs.writeFileSync(filePath, Buffer.from(data));
+    } catch {
+      // ignore
+    }
+  }, 250);
 }
 
 function ensureSchema(database: UniversalDatabase): void {
