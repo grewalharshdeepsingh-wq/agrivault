@@ -154,6 +154,18 @@ router.post('/', (req: Request, res: Response): void => {
       db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ? COLLATE NOCASE', areaId, devId);
       db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', areaId, devId);
       db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', areaId, devId);
+
+      const updatedDev = db.get<any>(
+        `SELECT d.*, a.name as area_name, COALESCE(g.name, 'Direct Internet') as gateway_name
+         FROM esp_devices d
+         LEFT JOIN areas a ON d.area_id = a.id
+         LEFT JOIN gateways g ON d.gateway_id = g.id
+         WHERE d.id = ? COLLATE NOCASE`,
+        devId
+      );
+      if (updatedDev) {
+        broadcast('device_updated', updatedDev);
+      }
     }
   }
 
@@ -201,6 +213,8 @@ router.delete('/:id', (req: Request, res: Response): void => {
     return;
   }
 
+  const affectedDevices = db.all<any>('SELECT id FROM esp_devices WHERE area_id = ?', areaId);
+
   db.transaction(() => {
     // Unlink connected devices gracefully and return them to available discovered state
     db.run('UPDATE esp_devices SET area_id = NULL, is_discovered = 1 WHERE area_id = ?', areaId);
@@ -211,6 +225,20 @@ router.delete('/:id', (req: Request, res: Response): void => {
     db.run('DELETE FROM automation_rules WHERE area_id = ?', areaId);
     db.run('DELETE FROM areas WHERE id = ?', areaId);
   });
+
+  for (const dev of affectedDevices) {
+    const unlinkedDev = db.get<any>(
+      `SELECT d.*, a.name as area_name, COALESCE(g.name, 'Direct Internet') as gateway_name
+       FROM esp_devices d
+       LEFT JOIN areas a ON d.area_id = a.id
+       LEFT JOIN gateways g ON d.gateway_id = g.id
+       WHERE d.id = ? COLLATE NOCASE`,
+      dev.id
+    );
+    if (unlinkedDev) {
+      broadcast('device_updated', unlinkedDev);
+    }
+  }
 
   broadcast('area_deleted', { areaId });
   res.json({ success: true, message: `Room / Section "${existing.name}" removed successfully` });

@@ -75,15 +75,20 @@ app.use((req, res, next) => {
 
 // Ensure database is initialized before any route handling (crucial for Vercel serverless cold-starts)
 let dbReadyPromise: Promise<any> | null = null;
+export async function ensureDbReady(): Promise<any> {
+  if (!dbReadyPromise) {
+    dbReadyPromise = (async () => {
+      const database = await initDatabase();
+      seedDatabase();
+      return database;
+    })();
+  }
+  return dbReadyPromise;
+}
+
 app.use(async (req, res, next) => {
   try {
-    if (!dbReadyPromise) {
-      dbReadyPromise = (async () => {
-        await initDatabase();
-        seedDatabase();
-      })();
-    }
-    await dbReadyPromise;
+    await ensureDbReady();
     next();
   } catch (err: any) {
     dbReadyPromise = null; // reset on error so next request can retry
@@ -153,8 +158,7 @@ async function bootstrap() {
   console.log('====================================================');
 
   // 1. Initialize persistent Database
-  await initDatabase();
-  seedDatabase();
+  await ensureDbReady();
 
   // 2. Initialize WebSocket Real-Time Broadcasting
   initWebSocketServer(server);

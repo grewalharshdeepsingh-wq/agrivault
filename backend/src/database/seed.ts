@@ -82,3 +82,6 @@ export function seedDatabase(): void {
 
   console.log('[Seed] Production database ready. Zero mock devices or areas. Pure live mode.');
 }
+
+seedDatabase();
+

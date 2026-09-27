@@ -218,10 +218,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     // 8. Room / Area Changes
-    const unsubAreaDel = wsManager.on('area_deleted', () => {
+    const unsubAreaDel = wsManager.on('area_deleted', (payload) => {
+      if (payload?.areaId) {
+        setOverview((prev: any) => {
+          if (!prev || !prev.areas) return prev;
+          const filtered = prev.areas.filter((a: any) => a.id !== payload.areaId);
+          return {
+            ...prev,
+            areas: filtered,
+            activeAreasCount: filtered.length
+          };
+        });
+      }
       refreshOverview();
     });
-    const unsubAreaCreate = wsManager.on('area_created', () => {
+    const unsubAreaCreate = wsManager.on('area_created', (newArea) => {
+      if (newArea && newArea.id) {
+        setOverview((prev: any) => {
+          if (!prev || !prev.areas) return prev;
+          const exists = prev.areas.some((a: any) => a.id === newArea.id);
+          if (exists) return prev;
+          return {
+            ...prev,
+            areas: [...prev.areas, newArea],
+            activeAreasCount: prev.areas.length + 1
+          };
+        });
+      }
       refreshOverview();
     });
 

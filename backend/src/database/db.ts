@@ -14,12 +14,25 @@ export const isVercel = Boolean(
   process.env.NOW_REGION
 );
 
+function findWorkspaceRoot(startDir = process.cwd()): string {
+  let dir = path.resolve(startDir);
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, 'frontend')) && fs.existsSync(path.join(dir, 'backend'))) {
+      return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return process.cwd();
+}
+
 function getResolvedDbPath(): string {
   if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
   if (isVercel) return '/tmp/agrivault.db';
-  const parentData = path.resolve(process.cwd(), '../data/agrivault.db');
-  if (fs.existsSync(parentData)) return parentData;
-  return path.resolve(process.cwd(), 'data/agrivault.db');
+
+  const root = findWorkspaceRoot();
+  return path.resolve(root, 'data', 'agrivault.db');
 }
 
 const DB_PATH = getResolvedDbPath();

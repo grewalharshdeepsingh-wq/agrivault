@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { AreaCard } from '../components/AreaCard';
 import { api } from '../api/client';
+import { wsManager } from '../api/websocket';
 import { Area, ESPDevice } from '../types';
 import {
   Building2,
@@ -75,8 +76,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   useEffect(() => {
     fetchDevices();
-    const interval = setInterval(fetchDevices, 6000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchDevices, 5000);
+
+    const unsubUpdate = wsManager.on('device_updated', (dev) => {
+      if (dev && dev.id) {
+        setAllDevices((prev) => {
+          const exists = prev.some((d) => d.id.toLowerCase() === dev.id.toLowerCase());
+          if (exists) {
+            return prev.map((d) => (d.id.toLowerCase() === dev.id.toLowerCase() ? { ...d, ...dev } : d));
+          }
+          return [dev, ...prev];
+        });
+      }
+    });
+
+    const unsubDiscovered = wsManager.on('device_discovered', (payload) => {
+      const dev = payload?.device;
+      if (dev && dev.id) {
+        setAllDevices((prev) => {
+          const exists = prev.some((d) => d.id.toLowerCase() === dev.id.toLowerCase());
+          if (exists) {
+            return prev.map((d) => (d.id.toLowerCase() === dev.id.toLowerCase() ? { ...d, ...dev } : d));
+          }
+          return [dev, ...prev];
+        });
+      }
+    });
+
+    const unsubDeleted = wsManager.on('device_deleted', (payload) => {
+      if (payload?.deviceId) {
+        setAllDevices((prev) => prev.filter((d) => d.id.toLowerCase() !== payload.deviceId.toLowerCase()));
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubUpdate();
+      unsubDiscovered();
+      unsubDeleted();
+    };
   }, []);
 
   // Open Create Modal
@@ -104,14 +142,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setIsSubmitting(true);
     try {
-      await api.createAreaDirect({
+      const createdArea = await api.createAreaDirect({
         name: roomName.trim(),
         commodity: roomCommodity,
         deviceIds: selectedDeviceIds
       });
+
+      // Optimistically update device mappings locally
+      if (selectedDeviceIds.length > 0 && createdArea?.id) {
+        setAllDevices((prev) =>
+          prev.map((d) =>
+            selectedDeviceIds.includes(d.id)
+              ? { ...d, area_id: createdArea.id, is_discovered: 0 }
+              : d
+          )
+        );
+      }
+
       setShowAddRoomModal(false);
-      await refreshOverview();
-      await fetchDevices();
+      await Promise.all([refreshOverview(), fetchDevices()]);
     } catch (err: any) {
       alert(`Error creating room: ${err.message}`);
     } finally {
@@ -144,8 +193,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }
 
       setEditingRoom(null);
-      await refreshOverview();
-      await fetchDevices();
+      await Promise.all([refreshOverview(), fetchDevices()]);
     } catch (err: any) {
       alert(`Error updating room: ${err.message}`);
     } finally {
@@ -162,8 +210,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     try {
       await api.deleteArea(editingRoom.id);
       setEditingRoom(null);
-      await refreshOverview();
-      await fetchDevices();
+      await Promise.all([refreshOverview(), fetchDevices()]);
     } catch (err: any) {
       alert(`Error deleting room: ${err.message}`);
     } finally {
@@ -176,8 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!confirm(`Are you sure you want to delete room "${area.name}"? Attached ESP devices will safely unassign and return to the available fleet.`)) return;
     try {
       await api.deleteArea(area.id);
-      await refreshOverview();
-      await fetchDevices();
+      await Promise.all([refreshOverview(), fetchDevices()]);
     } catch (err: any) {
       alert(`Error deleting room: ${err.message}`);
     }
@@ -188,8 +234,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!confirm(`Unassign "${deviceName}" from this room? It will return to the available fleet.`)) return;
     try {
       await api.unassignDevice(deviceId);
-      await refreshOverview();
-      await fetchDevices();
+      await Promise.all([refreshOverview(), fetchDevices()]);
     } catch (err: any) {
       alert(`Error unassigning device: ${err.message}`);
     }
