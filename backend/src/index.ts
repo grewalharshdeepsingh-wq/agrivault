@@ -38,23 +38,44 @@ const MQTT_PORT = parseInt(process.env.MQTT_PORT || '1883', 10);
 // Global Middleware
 app.use(cors({ origin: '*' }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.text({ type: ['text/plain', 'application/json'] }));
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/facilities', facilityRoutes);
-app.use('/api/areas', areaRoutes);
-app.use('/api/devices', deviceRoutes);
-app.use('/api/sensors', sensorRoutes);
-app.use('/api/thresholds', thresholdRoutes);
-app.use('/api/alerts', alertRoutes);
-app.use('/api/relays', relayRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/system', systemRoutes);
-app.use('/api/simulation', simulationRoutes);
+// Normalize parsed string body if sent as raw text from microcontrollers
+app.use((req, res, next) => {
+  if (typeof req.body === 'string') {
+    try {
+      req.body = JSON.parse(req.body);
+    } catch {
+      // ignore
+    }
+  }
+  next();
+});
+
+// API Routes (Mounted on both /api/* and root /* for Vercel Service rewrite resilience)
+const apiRoutes: [string, any][] = [
+  ['/auth', authRoutes],
+  ['/facilities', facilityRoutes],
+  ['/areas', areaRoutes],
+  ['/devices', deviceRoutes],
+  ['/sensors', sensorRoutes],
+  ['/thresholds', thresholdRoutes],
+  ['/alerts', alertRoutes],
+  ['/relays', relayRoutes],
+  ['/reports', reportRoutes],
+  ['/analytics', analyticsRoutes],
+  ['/system', systemRoutes],
+  ['/simulation', simulationRoutes]
+];
+
+for (const [routePath, handler] of apiRoutes) {
+  app.use(`/api${routePath}`, handler);
+  app.use(routePath, handler);
+}
 
 // Root diagnostic route
-app.get('/api', (req, res) => {
+app.get(['/api', '/api/ping', '/ping'], (req, res) => {
   res.json({
     app: 'AgriVault IoT Storage Intelligence Engine',
     version: '1.0.0',

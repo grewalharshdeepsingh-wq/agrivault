@@ -93,6 +93,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }).catch(() => {});
   }, [refreshOverview, refreshAlerts, refreshSimulation]);
 
+  // Polling fallback when WebSocket is not active (crucial for Vercel serverless environment)
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      if (!isWsConnected) {
+        refreshOverview();
+        refreshAlerts();
+        api.getDevices({ isDiscovered: 'true' }).then((devs) => {
+          setDiscoveredDevices(devs);
+        }).catch(() => {});
+      }
+    }, 4000);
+    return () => clearInterval(pollInterval);
+  }, [isWsConnected, refreshOverview, refreshAlerts]);
+
   // Wire Real-Time WebSocket Events
   useEffect(() => {
     // 1. Live Telemetry stream: update metrics smoothly

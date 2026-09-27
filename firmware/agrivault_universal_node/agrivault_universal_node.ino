@@ -82,6 +82,43 @@ String getUniqueDeviceId() {
   return String(buf);
 }
 
+// Helper: Normalize and sanitize server base URL entered in setup portal or serial
+String cleanServerUrl(String srv) {
+  srv.trim();
+  srv.replace(" ", "");
+  while (srv.endsWith("/")) {
+    srv.remove(srv.length() - 1);
+  }
+  // Strip accidental endpoint paths
+  if (srv.endsWith("/api/devices/telemetry")) {
+    srv.remove(srv.length() - 22);
+  } else if (srv.endsWith("/devices/telemetry")) {
+    srv.remove(srv.length() - 18);
+  } else if (srv.endsWith("/api/devices")) {
+    srv.remove(srv.length() - 12);
+  } else if (srv.endsWith("/devices")) {
+    srv.remove(srv.length() - 8);
+  } else if (srv.endsWith("/api")) {
+    srv.remove(srv.length() - 4);
+  }
+  while (srv.endsWith("/")) {
+    srv.remove(srv.length() - 1);
+  }
+  if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
+    if (srv.indexOf(".vercel.app") >= 0 || srv.indexOf(".com") >= 0 || srv.indexOf(".io") >= 0 || srv.indexOf(".net") >= 0 || srv.indexOf(".org") >= 0) {
+      srv = "https://" + srv;
+    } else {
+      srv = "http://" + srv;
+    }
+  }
+  int protoIdx = srv.indexOf("://");
+  String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
+  if (srv.startsWith("http://") && hostPart.indexOf(':') < 0 && hostPart.indexOf(".vercel.app") < 0 && hostPart.indexOf('.') < 0) {
+    srv += ":4000";
+  }
+  return srv;
+}
+
 // ==============================================================================
 // EEPROM Persistent Storage Helpers
 // ==============================================================================
@@ -169,24 +206,7 @@ void handleSave() {
     strncpy(config.wifiPass, server.arg("pass").c_str(), sizeof(config.wifiPass) - 1);
   }
   if (server.hasArg("server")) {
-    String srv = server.arg("server");
-    srv.trim();
-    srv.replace(" ", ""); // Strip accidental spaces e.g. "http:// 192.168..."
-    while (srv.endsWith("/")) {
-      srv.remove(srv.length() - 1);
-    }
-    if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
-      if (srv.indexOf(".vercel.app") >= 0 || srv.indexOf(".com") >= 0 || srv.indexOf(".io") >= 0) {
-        srv = "https://" + srv;
-      } else {
-        srv = "http://" + srv;
-      }
-    }
-    int protoIdx = srv.indexOf("://");
-    String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
-    if (srv.startsWith("http://") && hostPart.indexOf(':') < 0 && hostPart.indexOf(".vercel.app") < 0) {
-      srv += ":4000";
-    }
+    String srv = cleanServerUrl(server.arg("server"));
     strncpy(config.serverUrl, srv.c_str(), sizeof(config.serverUrl) - 1);
   }
   if (server.hasArg("name")) {
@@ -366,25 +386,7 @@ void transmitTelemetry() {
   // 4. Send HTTP/HTTPS POST to AgriVault Server
   HTTPClient http;
 
-  String srv = String(config.serverUrl);
-  srv.trim();
-  srv.replace(" ", ""); // Strip accidental spaces
-  while (srv.endsWith("/")) {
-    srv.remove(srv.length() - 1);
-  }
-  if (!srv.startsWith("http://") && !srv.startsWith("https://")) {
-    if (srv.indexOf(".vercel.app") >= 0 || srv.indexOf(".com") >= 0 || srv.indexOf(".io") >= 0) {
-      srv = "https://" + srv;
-    } else {
-      srv = "http://" + srv;
-    }
-  }
-  int protoIdx = srv.indexOf("://");
-  String hostPart = (protoIdx >= 0) ? srv.substring(protoIdx + 3) : srv;
-  if (srv.startsWith("http://") && hostPart.indexOf(':') < 0 && hostPart.indexOf(".vercel.app") < 0) {
-    srv += ":4000";
-  }
-
+  String srv = cleanServerUrl(String(config.serverUrl));
   String endpoint = srv + "/api/devices/telemetry";
   bool isHttps = srv.startsWith("https://");
 
@@ -392,24 +394,45 @@ void transmitTelemetry() {
   WiFiClientSecure clientHttps;
 
   if (isHttps) {
-    clientHttps.setInsecure(); // Accept Vercel Let's Encrypt SSL certificate
+    #if defined(ESP8266)
+      clientHttps.setInsecure();
+      clientHttps.setBufferSizes(1024, 1024); // Critical: prevents BearSSL OOM on ESP8266
+      clientHttps.setTimeout(8000);
+    #elif defined(ESP32)
+      clientHttps.setInsecure();
+      clientHttps.setTimeout(8000);
+    #endif
     http.begin(clientHttps, endpoint);
   } else {
     http.begin(clientHttp, endpoint);
   }
 
-  http.setTimeout(3500); // 3.5s timeout prevents blocking loop()
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(8000); // 8s timeout allows TLS handshake + network latency
   http.addHeader("Content-Type", "application/json");
 
-  // Indicate transmission with LED pulse
-  digitalWrite(PIN_STATUS_LED, HIGH);
+  // Indicate transmission with LED pulse (active LOW on NodeMCU)
+  #if defined(ESP8266)
+    digitalWrite(PIN_STATUS_LED, LOW);
+  #else
+    digitalWrite(PIN_STATUS_LED, HIGH);
+  #endif
+
   int httpCode = http.POST(jsonPayload);
-  digitalWrite(PIN_STATUS_LED, LOW);
+
+  #if defined(ESP8266)
+    digitalWrite(PIN_STATUS_LED, HIGH);
+  #else
+    digitalWrite(PIN_STATUS_LED, LOW);
+  #endif
 
   if (httpCode > 0) {
     Serial.printf("[HTTP Ingest] Sent to %s -> Code %d | Temp: %.2f°C | CO2: %dppm\n", endpoint.c_str(), httpCode, tempC, (int)co2Ppm);
+    if (httpCode != 200 && httpCode != 201) {
+      Serial.printf("[HTTP Ingest Warning] Response: %s\n", http.getString().c_str());
+    }
   } else {
-    Serial.printf("[HTTP Ingest] Failed to connect to %s (Error: %s)\n", endpoint.c_str(), http.errorToString(httpCode).c_str());
+    Serial.printf("[HTTP Ingest Error] Failed to connect to %s (Error: %s)\n", endpoint.c_str(), http.errorToString(httpCode).c_str());
   }
   http.end();
 }
@@ -513,6 +536,16 @@ void loop() {
   ArduinoOTA.handle();
   server.handleClient();
 
+  // Auto-reconnect Wi-Fi if connection was lost in normal monitoring mode
+  if (WiFi.status() != WL_CONNECTED) {
+    static unsigned long lastReconnectAttempt = 0;
+    if (millis() - lastReconnectAttempt > 10000) {
+      lastReconnectAttempt = millis();
+      Serial.println(F("[WiFi] Link lost. Reconnecting..."));
+      WiFi.reconnect();
+    }
+  }
+
   // Listen for configuration commands on USB Serial Monitor
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
@@ -521,13 +554,14 @@ void loop() {
       Serial.println(F("[Serial] Erasing EEPROM configuration and returning to SoftAP..."));
       resetConfig();
       ESP.restart();
+    } else if (cmd.equalsIgnoreCase("STATUS")) {
+      Serial.println(F("\n--- Node Status ---"));
+      Serial.printf("Device ID: %s (%s)\n", uniqueDeviceId.c_str(), BOARD_TYPE);
+      Serial.printf("WiFi Status: %s | SSID: %s | IP: %s\n", (WiFi.status() == WL_CONNECTED ? "CONNECTED" : "DISCONNECTED"), config.wifiSsid, WiFi.localIP().toString().c_str());
+      Serial.printf("Server URL: %s\n", config.serverUrl);
+      Serial.println(F("-------------------\n"));
     } else if (cmd.startsWith("SERVER=")) {
-      String newSrv = cmd.substring(7);
-      newSrv.trim();
-      newSrv.replace(" ", "");
-      if (!newSrv.startsWith("http://") && !newSrv.startsWith("https://")) {
-        newSrv = "http://" + newSrv;
-      }
+      String newSrv = cleanServerUrl(cmd.substring(7));
       strncpy(config.serverUrl, newSrv.c_str(), sizeof(config.serverUrl) - 1);
       strncpy(config.magic, "AGRIV13", sizeof(config.magic));
       saveConfig();

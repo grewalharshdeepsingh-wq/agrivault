@@ -2,6 +2,9 @@
   "name": "agrivault-backend",
   "version": "1.0.0",
   "description": "Production-ready backend for AgriVault Cold Storage & Warehouse Environmental Monitoring",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -16,6 +16,7 @@ if (!fs.existsSync(dir)) {
 }
 
 let dbInstance: DatabaseSync | null = null;
+let isInitializing = false;
 
 export function getDatabase(): DatabaseSync {
   if (!dbInstance) {
@@ -24,6 +25,27 @@ export function getDatabase(): DatabaseSync {
     dbInstance.exec('PRAGMA journal_mode = WAL;');
     dbInstance.exec('PRAGMA synchronous = NORMAL;');
     dbInstance.exec('PRAGMA foreign_keys = ON;');
+
+    if (!isInitializing) {
+      isInitializing = true;
+      try {
+        const check = dbInstance.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='esp_devices'").get();
+        if (!check) {
+          const schemaPath = path.resolve(__dirname, 'schema.sql');
+          if (fs.existsSync(schemaPath)) {
+            const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+            dbInstance.exec(schemaSql);
+          } else {
+            dbInstance.exec(SCHEMA_SQL);
+          }
+          console.log('[Database] Auto-initialized schema on first connection.');
+        }
+      } catch (err) {
+        console.warn('[Database] Auto-schema init check:', err);
+      } finally {
+        isInitializing = false;
+      }
+    }
   }
   return dbInstance;
 }
