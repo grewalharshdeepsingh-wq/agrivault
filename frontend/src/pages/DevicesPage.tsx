@@ -343,8 +343,24 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       </div>
 
       {/* Devices Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredDevices.map((d) => {
+      {devices.length === 0 ? (
+        <div className="bg-vault-900/60 border border-dashed border-vault-800 rounded-2xl p-10 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-vault-800/80 border border-vault-700/80 text-vault-400 mx-auto flex items-center justify-center">
+            <Cpu className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">No ESP Devices Connected</h3>
+          <p className="text-xs text-vault-400 max-w-md mx-auto">
+            No microcontrollers are currently transmitting. Power on your ESP32 or ESP8266 board connected to Wi-Fi. 
+            The moment it transmits to the server, it will appear here automatically under "Available Devices" ready to be named and assigned.
+          </p>
+        </div>
+      ) : filteredDevices.length === 0 ? (
+        <div className="bg-vault-900/60 border border-vault-800 rounded-2xl p-8 text-center text-vault-400 text-xs">
+          No devices match your current filters.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredDevices.map((d) => {
           const dev8266 = is8266(d);
           const isAvailable = !d.area_id || d.is_discovered === 1;
 
@@ -493,7 +509,8 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
             </div>
           );
         })}
-      </div>
+        </div>
+      )}
 
       {/* Edit / Assign Modal */}
       {editingDevice && (

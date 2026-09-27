@@ -47,10 +47,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const offlineESPs = overview?.offlineESPs || 0;
   const activeAlerts = overview?.activeAlertsCount || 0;
   const criticalAlerts = overview?.criticalAlertsCount || 0;
-  const avgTemp = overview?.avgTemp !== undefined ? overview.avgTemp : '--';
-  const avgHum = overview?.avgHum !== undefined ? overview.avgHum : '--';
-  const co2Status = overview?.co2Status || 'Normal';
-  const gasStatus = overview?.gasStatus || 'Normal';
+  const avgTemp = overview?.avgTemp !== null && overview?.avgTemp !== undefined ? `${overview.avgTemp}°C` : '--';
+  const avgHum = overview?.avgHum !== null && overview?.avgHum !== undefined ? `${overview.avgHum}%` : '--';
+  const co2Status = overview?.co2Status || 'No Data';
+  const gasStatus = overview?.gasStatus || 'No Data';
   const gateway = overview?.gateway;
 
   // Room / Section Management State
@@ -278,7 +278,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span>Facility Avg Temp</span>
               <Thermometer className="w-3.5 h-3.5 text-rose-400" />
             </div>
-            <p className="text-2xl font-bold font-mono text-white">{avgTemp}°C</p>
+            <p className="text-2xl font-bold font-mono text-white">{avgTemp}</p>
             <span className="text-[10px] text-vault-500">Across All Vaults</span>
           </div>
 
@@ -288,7 +288,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <span>Facility Avg Hum</span>
               <Droplets className="w-3.5 h-3.5 text-sky-400" />
             </div>
-            <p className="text-2xl font-bold font-mono text-white">{avgHum}%</p>
+            <p className="text-2xl font-bold font-mono text-white">{avgHum}</p>
             <span className="text-[10px] text-vault-500">Target 80-95%</span>
           </div>
 
@@ -399,16 +399,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Area Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
-        {areas.map((area: any) => (
-          <AreaCard
-            key={area.id}
-            area={area}
-            onClick={() => onSelectArea(area.id)}
-            onEditArea={() => openEditModal(area)}
-          />
-        ))}
-      </div>
+      {areas.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
+          {areas.map((area: any) => (
+            <AreaCard
+              key={area.id}
+              area={area}
+              onClick={() => onSelectArea(area.id)}
+              onEditArea={() => openEditModal(area)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-vault-900/60 border border-dashed border-vault-800 rounded-2xl p-8 text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-vault-800/80 border border-vault-700/80 text-vault-400 mx-auto flex items-center justify-center">
+            <Layers className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-white">No Monitored Rooms Configured Yet</h3>
+          <p className="text-xs text-vault-400 max-w-md mx-auto">
+            {pendingDiscoveredESPs.length > 0
+              ? 'An ESP is connected and waiting to be assigned! Click "+ Add Room" below to name your room and link the device.'
+              : 'Power on your ESP32 or ESP8266. Once it connects to Wi-Fi, it will be detected automatically so you can assign it to a room.'}
+          </p>
+          <div className="pt-2">
+            <button
+              onClick={openCreateModal}
+              className="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold shadow transition inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Add Your First Room</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Create / Add Room Modal */}
       {showAddRoomModal && (

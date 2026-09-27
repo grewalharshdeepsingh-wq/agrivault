@@ -193,7 +193,7 @@ async function bootstrap() {
       console.warn('[MQTT] Broker notice:', err.message);
     });
     startHeartbeatWatchdog(15000);
-    if (process.env.SIMULATION_ENABLED !== 'false') {
+    if (process.env.SIMULATION_ENABLED === 'true') {
       virtualFleet.start(3500);
     }
   }

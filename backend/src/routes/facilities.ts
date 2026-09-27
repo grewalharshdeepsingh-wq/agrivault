@@ -69,16 +69,16 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
 
   const avgTemp = tempSensors.length > 0
     ? +(tempSensors.reduce((acc, s) => acc + s.calibrated_reading, 0) / tempSensors.length).toFixed(1)
-    : 0;
+    : null;
   const avgHum = humSensors.length > 0
     ? Math.round(humSensors.reduce((acc, s) => acc + s.calibrated_reading, 0) / humSensors.length)
-    : 0;
+    : null;
 
   const maxCO2 = co2Sensors.length > 0
     ? Math.max(...co2Sensors.map(s => s.calibrated_reading))
-    : 0;
+    : null;
 
-  const co2Status = maxCO2 > 1400 ? 'Critical' : maxCO2 > 1200 ? 'Elevated' : 'Normal';
+  const co2Status = maxCO2 === null ? 'No Data' : maxCO2 > 1400 ? 'Critical' : maxCO2 > 1200 ? 'Elevated' : 'Normal';
 
   const anyGasElevated = gasSensors.some(s => {
     if (s.sensor_type === 'ammonia' && s.calibrated_reading > 4.0) return true;
@@ -86,6 +86,7 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
     if (s.sensor_type === 'ethylene' && s.calibrated_reading > 0.10) return true;
     return false;
   });
+  const gasStatus = gasSensors.length === 0 ? 'No Data' : anyGasElevated ? 'Elevated' : 'Normal';
 
   // Overall Facility Status
   let overallStatus = 'Normal';
@@ -149,7 +150,7 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
     avgTemp,
     avgHum,
     co2Status,
-    gasStatus: anyGasElevated ? 'Elevated' : 'Normal',
+    gasStatus,
     gateway: gateway || null,
     areas: enrichedAreas
   });
