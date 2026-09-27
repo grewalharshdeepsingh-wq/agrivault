@@ -100,24 +100,30 @@ app.get(['/api', '/api/ping', '/ping'], (req, res) => {
   });
 });
 
-// Serve compiled PWA frontend assets if dist folder exists
-const possibleDistPaths = [
-  path.resolve(process.cwd(), '../frontend/dist'),
-  path.resolve(process.cwd(), 'frontend/dist'),
-  path.resolve(__dirname, '../../frontend/dist'),
-  path.resolve(__dirname, '../../../frontend/dist')
-];
-const frontendDist = possibleDistPaths.find(p => fs.existsSync(p));
-if (frontendDist) {
-  app.use(express.static(frontendDist));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
-    res.sendFile(path.join(frontendDist, 'index.html'));
-  });
-  console.log(`[HTTP] Serving production frontend PWA build from ${frontendDist}`);
+// Serve compiled PWA frontend assets if dist folder exists (local standalone mode only)
+if (!process.env.VERCEL) {
+  const possibleDistPaths = [
+    path.resolve(process.cwd(), '../frontend/dist'),
+    path.resolve(process.cwd(), 'frontend/dist')
+  ];
+  const frontendDist = possibleDistPaths.find(p => fs.existsSync(p));
+  if (frontendDist) {
+    app.use(express.static(frontendDist));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path.startsWith('/ws')) return next();
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+    console.log(`[HTTP] Serving production frontend PWA build from ${frontendDist}`);
+  }
 }
 
 async function bootstrap() {
+  // In Vercel serverless environment, background TCP broker and persistent listeners are skipped
+  if (process.env.VERCEL) {
+    console.log('[AgriVault] Running in Vercel Serverless environment.');
+    return;
+  }
+
   console.log('====================================================');
   console.log('       ❄️ AGRIvault Industrial IoT Platform');
   console.log('   Storage Intelligence & Multi-Zone Environmental Hub');
@@ -126,12 +132,6 @@ async function bootstrap() {
   // 1. Initialize persistent Database
   await initDatabase();
   seedDatabase();
-
-  // In Vercel serverless environment, background TCP broker and persistent listeners are skipped
-  if (process.env.VERCEL) {
-    console.log('[AgriVault] Running in Vercel Serverless environment.');
-    return;
-  }
 
   // 2. Initialize WebSocket Real-Time Broadcasting
   initWebSocketServer(server);
