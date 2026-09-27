@@ -3,10 +3,12 @@
     "frontend": {
       "root": "frontend",
       "framework": "vite",
+      "installCommand": "npm install",
       "outputDirectory": "dist"
     },
     "backend": {
       "root": "backend",
+      "installCommand": "npm install",
       "buildCommand": "npm run build",
       "entrypoint": "index.js"
     }
