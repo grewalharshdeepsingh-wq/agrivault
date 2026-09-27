@@ -3,19 +3,15 @@
   "outputDirectory": "frontend/dist",
   "rewrites": [
     {
-      "source": "/api/ping",
-      "destination": "/api/ping"
-    },
-    {
       "source": "/api/(.*)",
-      "destination": "/api/index"
+      "destination": "/api/index.js"
     },
     {
       "source": "/api",
-      "destination": "/api/index"
+      "destination": "/api/index.js"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
