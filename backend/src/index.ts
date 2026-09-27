@@ -73,12 +73,19 @@ app.use((req, res, next) => {
 });
 
 // Ensure database is initialized before any route handling (crucial for Vercel serverless cold-starts)
+let dbReadyPromise: Promise<any> | null = null;
 app.use(async (req, res, next) => {
   try {
-    await initDatabase();
-    seedDatabase();
+    if (!dbReadyPromise) {
+      dbReadyPromise = (async () => {
+        await initDatabase();
+        seedDatabase();
+      })();
+    }
+    await dbReadyPromise;
     next();
   } catch (err: any) {
+    dbReadyPromise = null; // reset on error so next request can retry
     console.error('[Database Middleware Error]', err);
     res.status(500).json({ error: 'Database initialization error', details: err?.message || String(err) });
   }
@@ -212,4 +219,11 @@ if (!isVercel) {
 
 export default app;
 export { app, server };
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = app;
+  (module.exports as any).default = app;
+  (module.exports as any).app = app;
+  (module.exports as any).server = server;
+}
 
