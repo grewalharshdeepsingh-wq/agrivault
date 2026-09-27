@@ -5,12 +5,24 @@ import { SCHEMA_SQL } from './schemaSql.js';
 
 dotenv.config();
 
-const DB_PATH = process.env.DATABASE_PATH || (process.env.VERCEL ? '/tmp/agrivault.db' : './data/agrivault.db');
+export const isVercel = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.VERCEL_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.NOW_REGION
+);
 
-// Ensure database directory exists
-const dir = path.dirname(path.resolve(DB_PATH));
-if (!fs.existsSync(dir)) {
-  fs.mkdirSync(dir, { recursive: true });
+const DB_PATH = process.env.DATABASE_PATH || (isVercel ? '/tmp/agrivault.db' : './data/agrivault.db');
+
+// Ensure database directory exists safely without crashing on read-only environments
+try {
+  const dir = path.dirname(path.resolve(DB_PATH));
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+} catch {
+  // Read-only filesystem or restricted environment
 }
 
 export interface UniversalDatabase {
@@ -108,8 +120,11 @@ function createSqlJsWrapper(sqlDb: any): UniversalDatabase {
 }
 
 function tryLoadNativeSqlite(): boolean {
+  if (isVercel) {
+    // Avoid attempting native node:sqlite on Vercel
+    return false;
+  }
   try {
-    // Dynamic require so bundlers without node:sqlite do not fail at build time
     const req = typeof require !== 'undefined' ? require : null;
     if (!req) return false;
     const nodeSqlite = req('node:sqlite');
@@ -155,7 +170,7 @@ function tryLoadNativeSqlite(): boolean {
       return true;
     }
   } catch {
-    // Native node:sqlite not supported in this runtime (e.g. Vercel)
+    // Native node:sqlite not supported in this runtime
   }
   return false;
 }
@@ -165,13 +180,13 @@ export async function initDatabase(): Promise<UniversalDatabase> {
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
-    // 1. Try native node:sqlite first
+    // 1. Try native node:sqlite first (local environment)
     if (tryLoadNativeSqlite() && dbInstance) {
       ensureSchema(dbInstance);
       return dbInstance;
     }
 
-    // 2. Portable WebAssembly/JS fallback using sql.js
+    // 2. Portable WebAssembly/JS fallback using sql.js (Vercel & serverless)
     console.log('[Database] Initializing portable SQLite engine (sql.js)...');
     const initSqlJs = require('sql.js/dist/sql-asm.js');
     const SQL = await initSqlJs();

@@ -32,6 +32,25 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
+export const isVercel = Boolean(
+  process.env.VERCEL ||
+  process.env.VERCEL_ENV ||
+  process.env.VERCEL_REGION ||
+  process.env.AWS_LAMBDA_FUNCTION_NAME ||
+  process.env.NOW_REGION
+);
+
+// Diagnostic instant ping endpoint (before any middleware or database logic)
+app.get(['/api/ping', '/ping'], (req, res) => {
+  res.status(200).json({
+    status: 'ONLINE',
+    app: 'AgriVault IoT Storage Intelligence Engine',
+    timestamp: new Date().toISOString(),
+    isVercel,
+    nodeVersion: process.version
+  });
+});
+
 const PORT = parseInt(process.env.PORT || '4000', 10);
 const MQTT_PORT = parseInt(process.env.MQTT_PORT || '1883', 10);
 
@@ -57,6 +76,7 @@ app.use((req, res, next) => {
 app.use(async (req, res, next) => {
   try {
     await initDatabase();
+    seedDatabase();
     next();
   } catch (err: any) {
     console.error('[Database Middleware Error]', err);
@@ -184,9 +204,11 @@ async function bootstrap() {
   }
 }
 
-bootstrap().catch(err => {
-  console.error('[Bootstrap] Startup notice:', err);
-});
+if (!isVercel) {
+  bootstrap().catch(err => {
+    console.error('[Bootstrap] Startup notice:', err);
+  });
+}
 
 export default app;
 export { app, server };
