@@ -7,7 +7,7 @@
     "backend"
   ],
   "scripts": {
-    "build": "npm run build --prefix frontend && npm run build --prefix backend",
+    "build": "npm run build:frontend && npm run build:backend && node -e \"const fs = require('fs'); fs.cpSync('frontend/dist', 'public', {recursive: true});\"",
     "build:frontend": "npm run build --prefix frontend",
     "build:backend": "npm run build --prefix backend"
   },
