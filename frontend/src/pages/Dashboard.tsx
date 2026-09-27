@@ -47,10 +47,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const offlineESPs = overview?.offlineESPs || 0;
   const activeAlerts = overview?.activeAlertsCount || 0;
   const criticalAlerts = overview?.criticalAlertsCount || 0;
-  const avgTemp = overview?.avgTemp !== null && overview?.avgTemp !== undefined ? `${overview.avgTemp}°C` : '--';
-  const avgHum = overview?.avgHum !== null && overview?.avgHum !== undefined ? `${overview.avgHum}%` : '--';
-  const co2Status = overview?.co2Status || 'No Data';
-  const gasStatus = overview?.gasStatus || 'No Data';
+  const hasLiveHardware = connectedESPs > 0;
+  const avgTemp = hasLiveHardware && overview?.avgTemp !== null && overview?.avgTemp !== undefined ? `${overview.avgTemp}°C` : '--';
+  const avgHum = hasLiveHardware && overview?.avgHum !== null && overview?.avgHum !== undefined ? `${overview.avgHum}%` : '--';
+  const co2Status = hasLiveHardware ? (overview?.co2Status || 'No Data') : 'No Data';
+  const gasStatus = hasLiveHardware ? (overview?.gasStatus || 'No Data') : 'No Data';
   const gateway = overview?.gateway;
 
   // Room / Section Management State
@@ -279,7 +280,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <Thermometer className="w-3.5 h-3.5 text-rose-400" />
             </div>
             <p className="text-2xl font-bold font-mono text-white">{avgTemp}</p>
-            <span className="text-[10px] text-vault-500">Across All Vaults</span>
+            <span className="text-[10px] text-vault-500">
+              {hasLiveHardware ? 'Across All Vaults' : 'No Live ESP Connected'}
+            </span>
           </div>
 
           {/* Average Humidity */}
@@ -289,7 +292,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <Droplets className="w-3.5 h-3.5 text-sky-400" />
             </div>
             <p className="text-2xl font-bold font-mono text-white">{avgHum}</p>
-            <span className="text-[10px] text-vault-500">Target 80-95%</span>
+            <span className="text-[10px] text-vault-500">
+              {hasLiveHardware ? 'Target 80-95%' : 'No Live ESP Connected'}
+            </span>
           </div>
 
           {/* CO2 & Gas Status */}
@@ -299,10 +304,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <Wind className="w-3.5 h-3.5 text-emerald-400" />
             </div>
             <p className="text-sm font-bold text-white mt-1">
-              CO2: <span className={co2Status === 'Elevated' ? 'text-amber-400' : 'text-emerald-400'}>{co2Status}</span>
+              CO2:{' '}
+              <span
+                className={
+                  !hasLiveHardware || co2Status === 'No Data'
+                    ? 'text-vault-400 font-normal'
+                    : co2Status === 'Elevated' || co2Status === 'Critical'
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
+                }
+              >
+                {hasLiveHardware ? co2Status : 'No ESP'}
+              </span>
             </p>
             <p className="text-[11px] text-vault-400 font-medium">
-              VOC/NH3: <span className={gasStatus === 'Elevated' ? 'text-amber-400' : 'text-emerald-400'}>{gasStatus}</span>
+              VOC/NH3:{' '}
+              <span
+                className={
+                  !hasLiveHardware || gasStatus === 'No Data'
+                    ? 'text-vault-400 font-normal'
+                    : gasStatus === 'Elevated'
+                    ? 'text-amber-400'
+                    : 'text-emerald-400'
+                }
+              >
+                {hasLiveHardware ? gasStatus : 'No ESP'}
+              </span>
             </p>
           </div>
         </div>

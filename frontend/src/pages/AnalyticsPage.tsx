@@ -92,7 +92,7 @@ export const AnalyticsPage: React.FC = () => {
       }
     });
   });
-  const avgStability = stabilityCount > 0 ? Math.round(totalStabilitySum / stabilityCount) : 96;
+  const avgStability = stabilityCount > 0 ? Math.round(totalStabilitySum / stabilityCount) : null;
 
   return (
     <div className="space-y-6">
@@ -186,10 +186,16 @@ export const AnalyticsPage: React.FC = () => {
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-baseline gap-2">
-            <p className="text-2xl font-bold font-mono text-emerald-400">{avgStability}%</p>
-            <span className="text-xs text-vault-400">Optimal Tolerance</span>
+            <p className="text-2xl font-bold font-mono text-emerald-400">
+              {avgStability !== null ? `${avgStability}%` : '--'}
+            </p>
+            <span className="text-xs text-vault-400">
+              {avgStability !== null ? 'Optimal Tolerance' : 'No Active Sensor'}
+            </span>
           </div>
-          <span className="text-[10px] text-vault-500">Readings within target drift threshold</span>
+          <span className="text-[10px] text-vault-500">
+            {avgStability !== null ? 'Readings within target drift threshold' : 'Awaiting live ESP telemetry'}
+          </span>
         </div>
 
         {/* Active Discovered ESP Fleet */}

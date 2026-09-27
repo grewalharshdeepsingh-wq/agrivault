@@ -101,13 +101,19 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
   const gasStatus = gasSensors.length === 0 ? 'No Data' : anyGasElevated ? 'Elevated' : 'Normal';
 
   // Overall Facility Status
-  let overallStatus = 'Normal';
-  if (criticalAlertsCount > 0 || areas.some(a => a.health_status === 'critical')) {
+  let overallStatus = 'Standby (No Hardware)';
+  if (connectedESPs === 0 && devices.length === 0) {
+    overallStatus = 'Standby (No Hardware)';
+  } else if (connectedESPs === 0) {
+    overallStatus = 'Standby (All Offline)';
+  } else if (criticalAlertsCount > 0 || areas.some(a => a.health_status === 'critical')) {
     overallStatus = 'Critical';
   } else if (warningAlertsCount > 0 || areas.some(a => a.health_status === 'warning')) {
     overallStatus = 'Warning';
   } else if (areas.some(a => a.health_status === 'attention')) {
     overallStatus = 'Attention';
+  } else {
+    overallStatus = 'Normal';
   }
 
   // Enrich each area with its latest primary metrics
@@ -130,8 +136,12 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
       };
     };
 
+    const isUnmonitored = areaDevices.length === 0;
+
     return {
       ...area,
+      health_status: isUnmonitored ? 'standby' : area.health_status,
+      health_score: isUnmonitored ? 0 : area.health_score,
       devices: areaDevices,
       deviceCount: areaDevices.length,
       activeAlertsCount: areaAlerts.length,

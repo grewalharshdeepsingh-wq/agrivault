@@ -138,10 +138,14 @@ router.post('/', (req: Request, res: Response): void => {
   const facId = facilityId || 'fac-01';
   const now = new Date().toISOString();
 
+  const hasDevices = Array.isArray(deviceIds) && deviceIds.length > 0;
+  const initialStatus = hasDevices ? 'normal' : 'standby';
+  const initialScore = hasDevices ? 100.0 : 0.0;
+
   db.run(
     `INSERT INTO areas (id, facility_id, name, commodity, health_status, health_score, health_reasons, created_at)
-     VALUES (?, ?, ?, ?, 'normal', 100.0, '[]', ?)`,
-    areaId, facId, trimmedName, commodity || 'General Produce', now
+     VALUES (?, ?, ?, ?, ?, ?, '[]', ?)`,
+    areaId, facId, trimmedName, commodity || 'General Produce', initialStatus, initialScore, now
   );
 
   // Link selected ESP devices

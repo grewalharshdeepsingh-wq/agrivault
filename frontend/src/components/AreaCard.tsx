@@ -32,33 +32,48 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
   const nh3 = metrics?.ammonia;
   const voc = metrics?.ethanol;
 
+  const isUnmonitored = !deviceCount || deviceCount === 0;
+
   // Status Styling
-  const statusConfig = {
-    normal: {
-      border: 'border-emerald-500/30 hover:border-emerald-500/60',
-      badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-      dot: 'bg-emerald-400',
-      label: 'Normal'
-    },
-    attention: {
-      border: 'border-yellow-500/40 hover:border-yellow-500/70',
-      badge: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40',
-      dot: 'bg-yellow-400',
-      label: 'Attention'
-    },
-    warning: {
-      border: 'border-amber-500/50 hover:border-amber-500/80',
-      badge: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
-      dot: 'bg-amber-400',
-      label: 'Warning'
-    },
-    critical: {
-      border: 'border-rose-500/60 hover:border-rose-500',
-      badge: 'bg-rose-500/25 text-rose-300 border-rose-500/60 animate-pulse',
-      dot: 'bg-rose-400',
-      label: 'Critical'
-    }
-  }[health_status || 'normal'];
+  const statusConfig = isUnmonitored
+    ? {
+        border: 'border-vault-800 hover:border-vault-700',
+        badge: 'bg-vault-800 text-vault-400 border-vault-700',
+        dot: 'bg-vault-500',
+        label: 'Standby'
+      }
+    : {
+        normal: {
+          border: 'border-emerald-500/30 hover:border-emerald-500/60',
+          badge: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
+          dot: 'bg-emerald-400',
+          label: 'Normal'
+        },
+        attention: {
+          border: 'border-yellow-500/40 hover:border-yellow-500/70',
+          badge: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40',
+          dot: 'bg-yellow-400',
+          label: 'Attention'
+        },
+        warning: {
+          border: 'border-amber-500/50 hover:border-amber-500/80',
+          badge: 'bg-amber-500/20 text-amber-300 border-amber-500/50',
+          dot: 'bg-amber-400',
+          label: 'Warning'
+        },
+        critical: {
+          border: 'border-rose-500/60 hover:border-rose-500',
+          badge: 'bg-rose-500/25 text-rose-300 border-rose-500/60 animate-pulse',
+          dot: 'bg-rose-400',
+          label: 'Critical'
+        },
+        standby: {
+          border: 'border-vault-800 hover:border-vault-700',
+          badge: 'bg-vault-800 text-vault-400 border-vault-700',
+          dot: 'bg-vault-500',
+          label: 'Standby'
+        }
+      }[health_status || 'standby'];
 
   // Helper for Rate of Change trend
   const renderRoc = (roc?: number, unit = '', period = '30 min') => {
@@ -106,7 +121,7 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
           <div className="flex flex-col items-end gap-1">
             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${statusConfig.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></span>
-              {statusConfig.label} ({Math.round(health_score)}%)
+              {isUnmonitored ? 'Standby — No Sensor' : `${statusConfig.label} (${Math.round(health_score)}%)`}
             </span>
             {activeAlertsCount !== undefined && activeAlertsCount > 0 && (
               <span className="text-[10px] text-rose-400 font-mono font-medium flex items-center gap-1">
@@ -197,7 +212,7 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
           <div className="bg-vault-950/70 rounded-lg p-2 border border-vault-800/60">
             <span className="text-[11px] text-vault-400 block mb-0.5">Ethylene</span>
             <span className="text-sm font-bold font-mono text-slate-200">
-              {eth ? eth.value.toFixed(2) : '0.04'} <span className="text-[10px] font-normal text-vault-500">ppm</span>
+              {eth ? `${eth.value.toFixed(2)} ppm` : '--'}
             </span>
           </div>
 
@@ -205,7 +220,7 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
           <div className="bg-vault-950/70 rounded-lg p-2 border border-vault-800/60">
             <span className="text-[11px] text-vault-400 block mb-0.5">Ammonia</span>
             <span className="text-sm font-bold font-mono text-slate-200">
-              {nh3 ? nh3.value.toFixed(1) : '1.8'} <span className="text-[10px] font-normal text-vault-500">ppm</span>
+              {nh3 ? `${nh3.value.toFixed(1)} ppm` : '--'}
             </span>
           </div>
 
@@ -213,7 +228,7 @@ export const AreaCard: React.FC<AreaCardProps> = ({ area, onClick, onEditArea })
           <div className="bg-vault-950/70 rounded-lg p-2 border border-vault-800/60">
             <span className="text-[11px] text-vault-400 block mb-0.5">Ethanol / VOC</span>
             <span className="text-sm font-bold font-mono text-slate-200">
-              {voc ? voc.value.toFixed(1) : '0.6'} <span className="text-[10px] font-normal text-vault-500">ppm</span>
+              {voc ? `${voc.value.toFixed(1)} ppm` : '--'}
             </span>
           </div>
         </div>
