@@ -8,13 +8,13 @@
 // ==============================================================================
 
 // Default fallback server address (can be changed anytime in SoftAP setup wizard)
-// Direct connection over Internet / LAN to AgriVault Server
-#define DEFAULT_SERVER_URL   "http://192.168.1.100:4000"
+// Replace with your actual Vercel deployment URL after deploying
+#define DEFAULT_SERVER_URL   "https://YOUR-PROJECT.vercel.app"
 #define DEFAULT_FACILITY_ID  "fac-01"
 #define FIRMWARE_VERSION     "1.3.0-ota"
 
-// Telemetry streaming interval in milliseconds (default: every 5 seconds)
-#define TELEMETRY_INTERVAL_MS 5000
+// Telemetry streaming interval in milliseconds (1 second = real-time cloud updates)
+#define TELEMETRY_INTERVAL_MS 1000
 
 // SoftAP Captive Portal configuration
 #define AP_SSID_PREFIX       "AgriVault-Node-"

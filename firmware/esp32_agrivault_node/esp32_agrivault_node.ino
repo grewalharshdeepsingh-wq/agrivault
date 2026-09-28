@@ -8,12 +8,18 @@
  * - 5V Relay Actuator Module (GPIO 26)
  *
  * Protocols:
- * - MQTT telemetry publishing to AgriVault Gateway
+ * - HTTP POST to Vercel Cloud (primary — POST /api/devices/telemetry every 1s)
+ * - MQTT telemetry publishing to local AgriVault broker (secondary / offline)
  * - Auto-Discovery registration announcement on boot
  * - Remote Relay command subscription with safety watchdog
+ *
+ * Transport priority:
+ *   1. HTTP POST → Vercel Cloud (works from any Wi-Fi / LTE connection)
+ *   2. MQTT → local broker (if MQTT_BROKER_HOST is reachable)
  */
 
 #include <WiFi.h>
+#include <HTTPClient.h>
 #include <PubSubClient.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -82,6 +88,34 @@ void connectWiFi() {
         Serial.println("\n[WiFi] Failed to connect, continuing in offline buffering mode.");
     }
 }
+
+// -----------------------------------------------------------------------
+// sendTelemetryHTTP — Primary cloud transport: HTTP POST to Vercel
+// This works from any internet-connected Wi-Fi or LTE modem.
+// Called every TELEMETRY_INTERVAL_MS (1 second).
+// -----------------------------------------------------------------------
+bool sendTelemetryHTTP(const String& jsonPayload) {
+    if (WiFi.status() != WL_CONNECTED) return false;
+
+    HTTPClient http;
+    http.begin(CLOUD_API_URL);
+    http.addHeader("Content-Type", "application/json");
+    // Optional: add a simple auth header if you set API_SECRET in config.h
+    // http.addHeader("x-api-key", API_SECRET);
+
+    int httpCode = http.POST(jsonPayload);
+
+    if (httpCode == HTTP_CODE_OK || httpCode == HTTP_CODE_CREATED) {
+        Serial.println("[HTTP] Vercel ACK: " + String(httpCode));
+        http.end();
+        return true;
+    } else {
+        Serial.println("[HTTP] Vercel POST failed, code=" + String(httpCode));
+        http.end();
+        return false;
+    }
+}
+// -----------------------------------------------------------------------
 
 // Handles incoming relay actuation commands from AgriVault backend
 void onMqttMessage(char* topic, byte* payload, unsigned int length) {
@@ -227,9 +261,25 @@ void loop() {
             "}"
         "}";
 
+        // 5. Send telemetry — dual transport:
+        //    PRIMARY:   HTTP POST → Vercel Cloud (works over any internet connection)
+        //    SECONDARY: MQTT → local/VPS broker (if reachable, for edge processing)
+
+        bool httpOk = sendTelemetryHTTP(payload);
+
+        bool mqttOk = false;
         if (mqttClient.connected()) {
-            mqttClient.publish(telemetryTopic.c_str(), payload.c_str());
-            Serial.println("[Telemetry Published] Temp: " + String(tempC) + "C | CO2: " + String(co2Ppm) + "ppm");
+            mqttOk = mqttClient.publish(telemetryTopic.c_str(), payload.c_str());
         }
+
+        // Log outcome
+        Serial.print("[Telemetry 1s] Temp:");
+        Serial.print(tempC);
+        Serial.print("C CO2:");
+        Serial.print((int)co2Ppm);
+        Serial.print("ppm | HTTP:");
+        Serial.print(httpOk ? "OK" : "FAIL");
+        Serial.print(" MQTT:");
+        Serial.println(mqttOk ? "OK" : "SKIP");
     }
 }

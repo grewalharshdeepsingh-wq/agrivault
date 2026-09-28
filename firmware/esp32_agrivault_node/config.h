@@ -5,8 +5,15 @@
 #define WIFI_SSID           "AgriVault-Local-Mesh-5G"
 #define WIFI_PASSWORD       "agrivault2026"
 
-// --- AgriVault Cloud MQTT Settings (Connect directly over Internet) ---
-#define MQTT_BROKER_HOST    "192.168.1.100" // AgriVault Server IP or Domain (over Internet)
+// --- AgriVault Cloud URL (HTTP REST fallback endpoint) ---
+// Replace with your actual Vercel deployment URL after deploying
+#define CLOUD_API_URL       "https://YOUR-PROJECT.vercel.app/api/devices/telemetry"
+
+// --- AgriVault Cloud MQTT Settings ---
+// NOTE: Vercel is serverless — MQTT over TCP is not supported on Vercel.
+// Use HTTP REST ingest (CLOUD_API_URL above) as the primary cloud transport.
+// MQTT is still used if you run the backend locally or on a VPS.
+#define MQTT_BROKER_HOST    "YOUR-PROJECT.vercel.app" // Replace with Vercel domain or local IP
 #define MQTT_BROKER_PORT    1883
 #define MQTT_USERNAME       "agrivault_node"
 #define MQTT_PASSWORD       "node_secure_token"
@@ -29,7 +36,7 @@
 #define PIN_STATUS_LED      2   // Onboard Blue LED
 
 // --- Telemetry Intervals ---
-#define TELEMETRY_INTERVAL_MS 5000   // Send reading every 5 seconds
+#define TELEMETRY_INTERVAL_MS 1000   // Send reading every 1 second (cloud real-time)
 #define HEARTBEAT_INTERVAL_MS 15000  // Heartbeat every 15 seconds
 
 #endif // AGRIVAULT_CONFIG_H
