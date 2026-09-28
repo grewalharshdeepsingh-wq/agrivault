@@ -34,10 +34,12 @@
 
 // ── Board compatibility shim ───────────────────────────────────────────────
 #if defined(ESP8266)
+  #include <ESP8266WiFi.h>
   #include <SoftwareSerial.h>
   SoftwareSerial BridgeSerial(D6, D7); // RX=D6 (GPIO12), TX=D7 (GPIO13)
   #define BridgeSerial BridgeSerial
 #elif defined(ESP32)
+  #include <WiFi.h>   // needed for WiFi.macAddress() even without connecting
   #define BridgeSerial Serial2          // Hardware Serial2: TX=GPIO17, RX=GPIO16
 #else
   #error "Unsupported board — select ESP32 or ESP8266 in Arduino IDE"
@@ -62,19 +64,17 @@ unsigned long lastTelemetryMs = 0;
 
 // Generate a stable MAC-derived device ID  e.g. "ESP32-A7F2C1"
 String getDeviceId() {
-#if defined(ESP32)
   uint8_t mac[6];
-  esp_efuse_mac_get_default(mac);           // true factory MAC
-  char buf[14];
-  snprintf(buf, sizeof(buf), "ESP32-%02X%02X%02X", mac[3], mac[4], mac[5]);
-  return String(buf);
-#else
-  uint8_t mac[6];
+  // WiFi.macAddress() reads the factory-burned MAC without needing
+  // a Wi-Fi connection — works on both ESP32 and ESP8266.
   WiFi.macAddress(mac);
   char buf[16];
+#if defined(ESP32)
+  snprintf(buf, sizeof(buf), "ESP32-%02X%02X%02X",   mac[3], mac[4], mac[5]);
+#else
   snprintf(buf, sizeof(buf), "ESP8266-%02X%02X%02X", mac[3], mac[4], mac[5]);
-  return String(buf);
 #endif
+  return String(buf);
 }
 
 // Convert raw 12-bit ADC (0-4095) to sensor resistance in kΩ
