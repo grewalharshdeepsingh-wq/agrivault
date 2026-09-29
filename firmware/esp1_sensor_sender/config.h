@@ -4,9 +4,9 @@
  * Role: Reads all physical sensors, sends a compact pipe-delimited
  *       data string to ESP #2 over UART (Serial2) every 1 second.
  *
- * Wiring to ESP #2:
- *   ESP #1 TX2 (GPIO 17) ──────► ESP #2 RX2 (GPIO 16)
- *   ESP #1 RX2 (GPIO 16) ◄────── ESP #2 TX2 (GPIO 17)
+ * Wiring to ESP #2 (Site Forwarder):
+ *   ESP #1 TX2 (GPIO 17) ──────► ESP #2 RX (D5 / GPIO 14)
+ *   ESP #1 RX2 (GPIO 16) ◄────── ESP #2 TX (D6 / GPIO 12)
  *   ESP #1 GND            ──────► ESP #2 GND   (SHARED GROUND — required)
  */
 

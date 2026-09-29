@@ -3,6 +3,7 @@ import os from 'node:os';
 import { db } from '../database/db.js';
 import { getMqttBrokerStatus } from '../mqtt/broker.js';
 import { getConnectedClientCount } from '../websocket/wsServer.js';
+import { applyStateMesh, globalMeshRooms, globalMeshAssignments } from '../engine/stateMeshEngine.js';
 
 const router = Router();
 
@@ -101,6 +102,30 @@ router.get('/health', (req: Request, res: Response): void => {
         channels: ['in_app', 'browser', 'webhook']
       }
     }
+  });
+});
+
+// POST /api/system/mesh-sync
+router.post('/mesh-sync', (req: Request, res: Response): void => {
+  try {
+    applyStateMesh(req.body);
+    res.json({
+      success: true,
+      activeRooms: globalMeshRooms.size,
+      activeAssignments: globalMeshAssignments.size,
+      syncedAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Mesh sync failed', details: err?.message || String(err) });
+  }
+});
+
+// GET /api/system/mesh-status
+router.get('/mesh-status', (req: Request, res: Response): void => {
+  res.json({
+    status: 'ACTIVE',
+    activeRooms: Array.from(globalMeshRooms.values()),
+    activeAssignments: Object.fromEntries(globalMeshAssignments.entries())
   });
 });
 

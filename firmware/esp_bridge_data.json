@@ -1,0 +1,91 @@
+{
+  "_comment": "AgriVault ESP#1 → ESP#2 JSON Bridge Communication File",
+  "_description": "This file documents the exact data format flowing between ESP#1 (Sensor Sender) and ESP#2 (JSON Forwarder). It is NOT used at runtime — both ESPs communicate via UART Serial2 using the pipe-delimited string format. This file serves as the developer reference and can also be used to test the backend API manually.",
+
+  "uart_wire_protocol": {
+    "_note": "This is the ACTUAL real-time format ESP#1 sends to ESP#2 over Serial2 (UART). One line per second, newline-terminated.",
+    "format": "AGVT|<deviceId>|<tempC>|<humidity>|<co2>|<ammonia>|<ethanol>|<battery>|<rssi>|<relayState>",
+    "example_line": "AGVT|ESP32-A7F2C1|4.82|88.2|1120|1.80|0.60|3.31|0|0",
+    "delimiter": "|",
+    "terminator": "\\n",
+    "baud_rate": 115200,
+    "fields": [
+      { "index": 0, "name": "header",     "type": "string", "value": "AGVT",         "description": "Packet sentinel — ESP#2 validates this before parsing" },
+      { "index": 1, "name": "deviceId",   "type": "string", "example": "ESP32-A7F2C1","description": "MAC-derived device ID from ESP#1" },
+      { "index": 2, "name": "tempC",      "type": "float",  "unit": "°C",            "example": "4.82",  "description": "DS18B20 temperature" },
+      { "index": 3, "name": "humidity",   "type": "float",  "unit": "%RH",           "example": "88.2",  "description": "Humidity (DHT22 or sinusoidal estimate)" },
+      { "index": 4, "name": "co2",        "type": "int",    "unit": "ppm",           "example": "1120",  "description": "CO2 surrogate from MQ-135" },
+      { "index": 5, "name": "ammonia",    "type": "float",  "unit": "ppm",           "example": "1.80",  "description": "NH3 from MQ-135" },
+      { "index": 6, "name": "ethanol",    "type": "float",  "unit": "ppm",           "example": "0.60",  "description": "VOC/ethanol from MQ-3" },
+      { "index": 7, "name": "battery",    "type": "float",  "unit": "V",             "example": "3.31",  "description": "Battery / supply voltage" },
+      { "index": 8, "name": "rssi",       "type": "int",    "unit": "dBm",           "example": "0",     "description": "RSSI placeholder — ESP#1 has no WiFi, always 0" },
+      { "index": 9, "name": "relayState", "type": "int",    "values": [0, 1],        "example": "0",     "description": "Relay output state (0=off, 1=on)" }
+    ]
+  },
+
+  "json_payload_sent_to_backend": {
+    "_note": "This is the JSON that ESP#2 builds from the UART data and HTTP POSTs to /api/devices/telemetry every 1 second.",
+    "endpoint": "POST https://YOUR-PROJECT.vercel.app/api/devices/telemetry",
+    "content_type": "application/json",
+    "example_payload": {
+      "deviceId":      "ESP32-A7F2C1",
+      "hardwareType":  "ESP32-DevKit-V1",
+      "facilityId":    "fac-01",
+      "timestamp":     "2026-09-28T10:10:00Z",
+      "temperature":   4.82,
+      "humidity":      88.2,
+      "co2":           1120,
+      "ethylene":      0.04,
+      "ammonia":       1.80,
+      "ethanol":       0.60,
+      "battery":       3.31,
+      "rssi":          0,
+      "relayState":    0,
+      "forwarderId":   "ESP32-FWDR-B1C2D3",
+      "forwarderRssi": -62
+    },
+    "fields": {
+      "deviceId":      "string  — ID of ESP#1 (the sensor node), forwarded by ESP#2",
+      "hardwareType":  "string  — board type of ESP#1, e.g. 'ESP32-DevKit-V1'",
+      "facilityId":    "string  — your tenant/facility ID, e.g. 'fac-01'",
+      "timestamp":     "string  — ISO 8601 UTC timestamp (use NTP for real time)",
+      "temperature":   "number  — float, degrees Celsius",
+      "humidity":      "number  — float, percent relative humidity",
+      "co2":           "number  — int, parts per million",
+      "ethylene":      "number  — float, fixed estimate 0.04 ppm",
+      "ammonia":       "number  — float, parts per million",
+      "ethanol":       "number  — float, parts per million (VOC)",
+      "battery":       "number  — float, volts",
+      "rssi":          "number  — int, dBm (0 = ESP#1 has no WiFi)",
+      "relayState":    "number  — int, 0 or 1",
+      "forwarderId":   "string  — MAC-derived ID of ESP#2 itself",
+      "forwarderRssi": "number  — int, dBm WiFi signal strength of ESP#2"
+    }
+  },
+
+  "backend_response": {
+    "_note": "Backend responds to every successful POST with this ACK. ESP#2 checks HTTP code 200/201.",
+    "http_status": 200,
+    "example": {
+      "status":      "ACK",
+      "deviceId":    "ESP32-A7F2C1",
+      "hardwareType":"ESP32-DevKit-V1",
+      "connection":  "Direct Internet (Cloud WAN)",
+      "receivedAt":  "2026-09-28T10:10:00.123Z"
+    }
+  },
+
+  "wiring": {
+    "esp1_tx2_gpio17": "→ ESP#2 RX Pin D5 (GPIO 14)  (data flows this way)",
+    "esp1_rx2_gpio16": "← ESP#2 TX Pin D6 (GPIO 12)  (optional ACK, not used by default)",
+    "shared_gnd":      "ESP#1 GND → ESP#2 GND         (REQUIRED — common ground)"
+  },
+
+  "timing": {
+    "esp1_sends_every_ms":   1000,
+    "esp2_posts_every_ms":   1000,
+    "serial_timeout_ms":     1500,
+    "http_timeout_ms":       5000,
+    "wifi_watchdog_ms":      10000
+  }
+}

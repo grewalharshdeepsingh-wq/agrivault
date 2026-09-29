@@ -23,8 +23,8 @@
  *   AGVT|ESP32-A7F2C1|4.82|88.2|1120|1.80|0.60|3.31|-58|0
  *
  * Wiring:
- *   ESP #1 TX2 (GPIO 17) ──► ESP #2 RX2 (GPIO 16)
- *   ESP #1 RX2 (GPIO 16) ◄── ESP #2 TX2 (GPIO 17)
+ *   ESP #1 TX2 (GPIO 17) ──► ESP #2 RX (D5 / GPIO 14)
+ *   ESP #1 RX2 (GPIO 16) ◄── ESP #2 TX (D6 / GPIO 12)
  *   ESP #1 GND           ──► ESP #2 GND  (REQUIRED)
  *
  * Libraries required (install via Arduino Library Manager):
@@ -138,7 +138,7 @@ void setup() {
   Serial.println("==============================================");
   Serial.print("  Device ID : "); Serial.println(deviceId);
   Serial.print("  Interval  : "); Serial.print(TELEMETRY_INTERVAL_MS); Serial.println(" ms");
-  Serial.println("  Bridge    : Serial2 TX=GPIO17 → ESP#2 RX=GPIO16");
+  Serial.println("  Bridge    : Serial2 TX=GPIO17 → ESP#2 RX=D5 (GPIO14)");
   Serial.println("==============================================");
 }
 

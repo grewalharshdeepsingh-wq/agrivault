@@ -44,31 +44,31 @@
  *   }
  *
  * ── Wiring ────────────────────────────────────────────────────────────────
- *   ESP #1 TX2 (GPIO 17) ──► ESP #2 RX2 (GPIO 16)   ← data flows here
- *   ESP #1 RX2 (GPIO 16) ◄── ESP #2 TX2 (GPIO 17)   ← optional ACK
- *   SHARED GND           ──► GND                     ← REQUIRED
+ *   ESP #1 TX2 (GPIO 17) ──► ESP #2 RX (D5 / GPIO 14)   ← data flows here
+ *   ESP #1 RX2 (GPIO 16) ◄── ESP #2 TX (D6 / GPIO 12)   ← optional ACK
+ *   SHARED GND           ──► GND                         ← REQUIRED
  *
  * ── Libraries (install via Arduino Library Manager) ──────────────────────
  *   - None beyond the ESP32/ESP8266 core (HTTPClient is built-in)
  */
+
+#include "config.h"
 
 // ── Board-specific includes ───────────────────────────────────────────────
 #if defined(ESP8266)
   #include <ESP8266WiFi.h>
   #include <ESP8266HTTPClient.h>
   #include <SoftwareSerial.h>
-  SoftwareSerial BridgeSerial(D6, D7);   // RX=D6(GPIO12), TX=D7(GPIO13)
+  SoftwareSerial BridgeSerial(BRIDGE_RX_PIN, BRIDGE_TX_PIN);   // RX=D5(GPIO14), TX=D6(GPIO12)
   #define BridgeSerial BridgeSerial
   WiFiClient wifiClient;
 #elif defined(ESP32)
   #include <WiFi.h>
   #include <HTTPClient.h>
-  #define BridgeSerial Serial2            // RX=GPIO16, TX=GPIO17
+  #define BridgeSerial Serial2
 #else
   #error "Unsupported board — select ESP32 or ESP8266"
 #endif
-
-#include "config.h"
 
 // ══════════════════════════════════════════════════════════════════════════
 // Runtime state
@@ -101,13 +101,12 @@ struct SensorReading {
 // ══════════════════════════════════════════════════════════════════════════
 
 // Build MAC-based forwarder ID  e.g.  "ESP32-FWDR-A1B2C3"
+// WiFi.macAddress() works on both ESP32 and ESP8266 via the included WiFi.h
+// and does NOT require esp_efuse.h — avoids the 'esp_efuse_mac_get_default'
+// undeclared scope error when compiling without the IDF efuse component header.
 String getForwarderId() {
   uint8_t mac[6];
-#if defined(ESP32)
-  esp_efuse_mac_get_default(mac);
-#else
-  WiFi.macAddress(mac);
-#endif
+  WiFi.macAddress(mac);   // reads factory-burned MAC — works on ESP32 & ESP8266
   char buf[20];
   snprintf(buf, sizeof(buf), "ESP32-FWDR-%02X%02X%02X", mac[3], mac[4], mac[5]);
   return String(buf);
@@ -275,8 +274,13 @@ void setup() {
   digitalWrite(PIN_STATUS_LED, LOW);
 
   // Start serial bridge to ESP #1
+#if defined(ESP8266)
   BridgeSerial.begin(BRIDGE_BAUD);
   BridgeSerial.setTimeout(SERIAL_TIMEOUT_MS);
+#elif defined(ESP32)
+  BridgeSerial.begin(BRIDGE_BAUD, SERIAL_8N1, BRIDGE_RX_PIN, BRIDGE_TX_PIN);
+  BridgeSerial.setTimeout(SERIAL_TIMEOUT_MS);
+#endif
 
   forwarderId = getForwarderId();
 
@@ -285,7 +289,15 @@ void setup() {
   Serial.println("==============================================");
   Serial.print("  Forwarder ID : "); Serial.println(forwarderId);
   Serial.print("  Cloud URL    : "); Serial.println(CLOUD_API_URL);
-  Serial.print("  Bridge       : Serial2 RX=GPIO16 ← ESP#1 TX");
+#if defined(ESP8266)
+  Serial.println("  Bridge       : SoftwareSerial RX=D5 (GPIO14), TX=D6 (GPIO12) ← ESP#1");
+#elif defined(ESP32)
+  Serial.print("  Bridge       : Serial2 RX=GPIO");
+  Serial.print(BRIDGE_RX_PIN);
+  Serial.print(", TX=GPIO");
+  Serial.print(BRIDGE_TX_PIN);
+  Serial.println(" ← ESP#1");
+#endif
   Serial.println("==============================================");
 
   connectWiFi();

@@ -5,6 +5,7 @@ node_modules/
 # Production build outputs
 frontend/dist/
 frontend/build/
+frontend/agrivault_single.html
 !backend/dist/
 
 # Local Environment & Secrets
