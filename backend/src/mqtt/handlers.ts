@@ -261,8 +261,16 @@ export function handleDeviceTelemetry(
   // Recalculate Area Health Score if assigned
   let areaHealthUpdate = null;
   if (areaId && areaId !== 'unassigned') {
-    const areaSensors = db.all<Sensor>(
-      "SELECT s.*, t.min_value, t.max_value, t.warning_min, t.warning_max FROM sensors s LEFT JOIN thresholds t ON t.scope_type = 'facility' AND t.parameter = s.sensor_type WHERE s.area_id = ?",
+    const areaSensors = db.all<any>(
+      `SELECT s.*,
+        COALESCE(ta.min_value, tf.min_value) as min_value,
+        COALESCE(ta.max_value, tf.max_value) as max_value,
+        COALESCE(ta.warning_min, tf.warning_min) as warning_min,
+        COALESCE(ta.warning_max, tf.warning_max) as warning_max
+       FROM sensors s
+       LEFT JOIN thresholds ta ON ta.scope_type = 'area' AND ta.scope_id = s.area_id AND ta.parameter = s.sensor_type
+       LEFT JOIN thresholds tf ON tf.scope_type = 'facility' AND tf.parameter = s.sensor_type
+       WHERE s.area_id = ?`,
       areaId
     );
 

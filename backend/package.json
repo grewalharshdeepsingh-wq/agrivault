@@ -8,7 +8,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --minify --outfile=index.js --external:node:sqlite && node -e \"require('fs').copyFileSync('index.js', 'dist/index.js')\"",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --minify --outfile=index.js --external:node:sqlite && node -e \"const fs=require('fs'); fs.mkdirSync('dist', {recursive:true}); fs.copyFileSync('index.js', 'dist/index.js')\"",
     "start": "node index.js",
     "seed": "tsx src/database/seed.ts"
   },

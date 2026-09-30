@@ -15,6 +15,19 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+if not exist "backend\node_modules\" (
+    echo [INFO] Installing backend dependencies...
+    cd backend && call npm install && cd ..
+)
+
+if not exist "frontend\dist\" (
+    echo [INFO] Building frontend production bundle...
+    cd frontend
+    if not exist "node_modules\" call npm install
+    call npm run build
+    cd ..
+)
+
 echo [2/3] Starting AgriVault Unified Industrial Backend & Embedded MQTT Hub...
 echo - REST API: http://localhost:4000/api
 echo - Web / Desktop / Mobile PWA: http://localhost:4000

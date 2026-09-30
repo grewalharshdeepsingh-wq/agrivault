@@ -58,7 +58,7 @@ export interface UniversalDatabase {
 
 let dbInstance: UniversalDatabase | null = null;
 let initPromise: Promise<UniversalDatabase> | null = null;
-
+let saveTimeout: NodeJS.Timeout | null = null;
 let isInsideTransaction = false;
 function scheduleSave(sqlDb: any): void {
   if (isInsideTransaction) return;

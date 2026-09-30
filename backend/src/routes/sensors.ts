@@ -24,17 +24,18 @@ router.get('/:id', (req: Request, res: Response): void => {
   // Get active threshold for this sensor
   const threshold = db.get(
     `SELECT * FROM thresholds
-     WHERE (scope_type = 'sensor' AND scope_id = ?)
+     WHERE ((scope_type = 'sensor' AND scope_id = ?)
         OR (scope_type = 'device' AND scope_id = ?)
         OR (scope_type = 'area' AND scope_id = ?)
-        OR (scope_type = 'facility')
+        OR (scope_type = 'facility'))
+       AND parameter = ?
      ORDER BY CASE scope_type
         WHEN 'sensor' THEN 1
         WHEN 'device' THEN 2
         WHEN 'area' THEN 3
         WHEN 'facility' THEN 4
      END LIMIT 1`,
-    sensorId, sensor.device_id, sensor.area_id
+    sensorId, sensor.device_id, sensor.area_id, sensor.sensor_type
   );
 
   res.json({

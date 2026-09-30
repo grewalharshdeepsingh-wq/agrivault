@@ -81,7 +81,11 @@ router.get('/:id', (req: Request, res: Response): void => {
   for (const s of sensors) {
     snapshot[s.sensor_type] = s.calibrated_reading;
     const thresh = db.get<any>(
-      "SELECT * FROM thresholds WHERE (scope_type = 'area' AND scope_id = ?) OR (scope_type = 'facility') AND parameter = ? LIMIT 1",
+      `SELECT * FROM thresholds
+       WHERE ((scope_type = 'area' AND scope_id = ?) OR scope_type = 'facility')
+         AND parameter = ?
+       ORDER BY CASE WHEN scope_type = 'area' THEN 0 ELSE 1 END
+       LIMIT 1`,
       areaId, s.sensor_type
     );
     if (thresh) {

@@ -6,6 +6,7 @@ node_modules/
 frontend/dist/
 frontend/build/
 frontend/agrivault_single.html
+frontend/index.dev.html
 !backend/dist/
 
 # Local Environment & Secrets
