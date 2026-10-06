@@ -123,6 +123,24 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ hardwareType })
     }),
+  approveDevice: (id: string, data: any) =>
+    request<any>(`/devices/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+  rejectDevice: (id: string) =>
+    request<any>(`/devices/${id}/reject`, { method: 'POST' }),
+  revokeDevice: (id: string) =>
+    request<any>(`/devices/${id}/revoke`, { method: 'POST' }),
+
+  // Gateways & Hardware Topology
+  getGateways: () => request<any[]>('/gateways'),
+  getGatewayTopology: () => request<any>('/gateways/topology'),
+  flushGatewayBuffer: () => request<any>('/gateways/buffer-flush', { method: 'POST' }),
+  controlGateway: (params: any) =>
+    request<any>('/gateways/control', { method: 'POST', body: JSON.stringify(params) }),
+  updateFacility: (id: string, data: any) =>
+    request<any>(`/facilities/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 
   // Sensors
   getSensor: (id: string) => request<any>(`/sensors/${id}`),
@@ -195,5 +213,9 @@ export const api = {
   setSimulationScenario: (scenario: string) =>
     request<any>('/simulation/scenario', { method: 'POST', body: JSON.stringify({ scenario }) }),
   toggleSimulation: (enabled: boolean) =>
-    request<any>('/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) })
+    request<any>('/simulation/toggle', { method: 'POST', body: JSON.stringify({ enabled }) }),
+  toggleNetworkFailure: (failureType: string, isFailed: boolean) =>
+    request<any>('/simulation/network-failure', { method: 'POST', body: JSON.stringify({ failureType, isFailed }) }),
+  toggleSimulatedNode: (deviceId: string, offline: boolean) =>
+    request<any>('/simulation/node/toggle', { method: 'POST', body: JSON.stringify({ deviceId, offline }) })
 };

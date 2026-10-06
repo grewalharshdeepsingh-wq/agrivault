@@ -93,12 +93,69 @@ function scheduleSave(sqlDb: any): void {
   }, 250);
 }
 
+function runMigrations(database: UniversalDatabase): void {
+  const alterStatements = [
+    "ALTER TABLE facilities ADD COLUMN length_ft REAL DEFAULT 162.0;",
+    "ALTER TABLE facilities ADD COLUMN width_ft REAL DEFAULT 94.0;",
+    "ALTER TABLE facilities ADD COLUMN height_ft REAL DEFAULT 48.0;",
+    "ALTER TABLE facilities ADD COLUMN dimensions_unit TEXT DEFAULT 'ft';",
+    "ALTER TABLE areas ADD COLUMN cold_store_name TEXT DEFAULT 'Cold Store A';",
+    "ALTER TABLE areas ADD COLUMN zone_name TEXT DEFAULT 'North Zone';",
+    "ALTER TABLE areas ADD COLUMN rack_name TEXT DEFAULT 'Rack 1';",
+    "ALTER TABLE areas ADD COLUMN pos_x REAL DEFAULT 20.0;",
+    "ALTER TABLE areas ADD COLUMN pos_y REAL DEFAULT 20.0;",
+    "ALTER TABLE areas ADD COLUMN pos_z REAL DEFAULT 2.0;",
+    "ALTER TABLE gateways ADD COLUMN gateway_type TEXT DEFAULT 'INNER_GATEWAY';",
+    "ALTER TABLE gateways ADD COLUMN connection_type TEXT DEFAULT 'RS485';",
+    "ALTER TABLE gateways ADD COLUMN paired_gateway_id TEXT;",
+    "ALTER TABLE gateways ADD COLUMN buffer_capacity INTEGER DEFAULT 5000;",
+    "ALTER TABLE gateways ADD COLUMN buffered_count INTEGER DEFAULT 0;",
+    "ALTER TABLE gateways ADD COLUMN internet_online INTEGER DEFAULT 1;",
+    "ALTER TABLE gateways ADD COLUMN wired_link_status TEXT DEFAULT 'connected';",
+    "ALTER TABLE esp_devices ADD COLUMN hardware_id TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN device_code TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN device_type TEXT DEFAULT 'SENSOR_NODE';",
+    "ALTER TABLE esp_devices ADD COLUMN registration_status TEXT DEFAULT 'active';",
+    "ALTER TABLE esp_devices ADD COLUMN cold_store_name TEXT DEFAULT 'Cold Store A';",
+    "ALTER TABLE esp_devices ADD COLUMN zone_name TEXT DEFAULT 'North Zone';",
+    "ALTER TABLE esp_devices ADD COLUMN rack_name TEXT DEFAULT 'Rack 1';",
+    "ALTER TABLE esp_devices ADD COLUMN level_name TEXT DEFAULT 'Level 1';",
+    "ALTER TABLE esp_devices ADD COLUMN pos_x REAL DEFAULT 20.0;",
+    "ALTER TABLE esp_devices ADD COLUMN pos_y REAL DEFAULT 20.0;",
+    "ALTER TABLE esp_devices ADD COLUMN pos_z REAL DEFAULT 2.0;",
+    "ALTER TABLE esp_devices ADD COLUMN parent_gateway_id TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN parent_node_id TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN connection_protocol TEXT DEFAULT 'ESP-NOW';",
+    "ALTER TABLE esp_devices ADD COLUMN is_simulated INTEGER DEFAULT 0;",
+    "ALTER TABLE sensor_readings ADD COLUMN is_buffered INTEGER DEFAULT 0;",
+    "ALTER TABLE sensor_readings ADD COLUMN buffered_at TEXT;"
+  ];
+
+  for (const sql of alterStatements) {
+    try {
+      database.exec(sql);
+    } catch {
+      // Column already exists - safe to ignore
+    }
+  }
+
+  try {
+    database.exec("UPDATE esp_devices SET hardware_id = mac_address WHERE hardware_id IS NULL AND mac_address IS NOT NULL;");
+    database.exec("UPDATE esp_devices SET device_code = id WHERE device_code IS NULL;");
+    database.exec("UPDATE esp_devices SET registration_status = 'active' WHERE registration_status IS NULL;");
+  } catch {
+    // ignore
+  }
+}
+
 function ensureSchema(database: UniversalDatabase): void {
   try {
     const check = database.get("SELECT name FROM sqlite_master WHERE type='table' AND name='esp_devices'");
     if (!check) {
       database.exec(SCHEMA_SQL);
       console.log('[Database] Schema verified and initialized successfully from embedded schema.');
+    } else {
+      runMigrations(database);
     }
   } catch (err: any) {
     console.warn('[Database] Schema check notice:', err?.message || err);

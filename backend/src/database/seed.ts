@@ -25,17 +25,55 @@ export function seedDatabase(): void {
     );
   }
 
-  // 2. Ensure default Facility exists
+  // 2. Ensure default Facility exists with configurable dimensions
   const existingFac = db.get('SELECT id FROM facilities WHERE id = ?', facId);
   if (!existingFac) {
     db.run(
-      'INSERT INTO facilities (id, organization_id, name, location, description, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO facilities (id, organization_id, name, location, description, length_ft, width_ft, height_ft, dimensions_unit, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       facId,
       orgId,
-      'Primary Cold Storage Facility',
-      'Local Operations Vault',
-      'Active commercial storage facility monitored by live ESP32 / ESP8266 IoT nodes.',
+      'Cold Store A (Bulk Operations)',
+      'Section 4, Industrial Food Park',
+      'High-capacity insulated cold storage vault (162 ft × 94 ft × 48 ft).',
+      162.0,
+      94.0,
+      48.0,
+      'ft',
       now
+    );
+  } else {
+    db.run(
+      'UPDATE facilities SET length_ft = COALESCE(length_ft, 162.0), width_ft = COALESCE(width_ft, 94.0), height_ft = COALESCE(height_ft, 48.0), dimensions_unit = COALESCE(dimensions_unit, \'ft\') WHERE id = ?',
+      facId
+    );
+  }
+
+  // Ensure default Gateways exist (Inner & Outer)
+  const existingOuter = db.get('SELECT id FROM gateways WHERE id = ?', 'GW-OUTER-01');
+  if (!existingOuter) {
+    db.run(
+      `INSERT INTO gateways (
+        id, facility_id, name, gateway_type, connection_type, paired_gateway_id, ip_address, mac_address,
+        firmware_version, is_online, last_heartbeat, local_network_ssid, status_detail, buffer_capacity,
+        buffered_count, internet_online, wired_link_status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      'GW-OUTER-01', facId, 'Outer Gateway (Perimeter WAN)', 'OUTER_GATEWAY', 'RS485', 'GW-INNER-01',
+      '192.168.1.50', '24:0A:C4:00:OUT:01', 'v2.1.0', 1, now, 'AgriVault-Core-Wi-Fi',
+      'Perimeter gateway connected to Internet and RS-485 wall bus', 5000, 0, 1, 'connected', now
+    );
+  }
+
+  const existingInner = db.get('SELECT id FROM gateways WHERE id = ?', 'GW-INNER-01');
+  if (!existingInner) {
+    db.run(
+      `INSERT INTO gateways (
+        id, facility_id, name, gateway_type, connection_type, paired_gateway_id, ip_address, mac_address,
+        firmware_version, is_online, last_heartbeat, local_network_ssid, status_detail, buffer_capacity,
+        buffered_count, internet_online, wired_link_status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      'GW-INNER-01', facId, 'Inner Gateway (Cold Vault Hub)', 'INNER_GATEWAY', 'RS485', 'GW-OUTER-01',
+      '10.0.0.10', '24:0A:C4:00:IN:01', 'v2.1.0', 1, now, 'ESP-NOW Mesh',
+      'Vault hub communicating with sensor nodes via ESP-NOW and RS-485', 5000, 0, 1, 'connected', now
     );
   }
 
@@ -82,4 +120,6 @@ export function seedDatabase(): void {
 
   console.log('[Seed] Production database ready. Zero mock devices or areas. Pure live mode.');
 }
+
+seedDatabase();
 

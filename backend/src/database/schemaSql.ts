@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS facilities (
     name TEXT NOT NULL,
     location TEXT NOT NULL,
     description TEXT,
+    length_ft REAL DEFAULT 162.0,
+    width_ft REAL DEFAULT 94.0,
+    height_ft REAL DEFAULT 48.0,
+    dimensions_unit TEXT DEFAULT 'ft',
     created_at TEXT NOT NULL
 );
 
@@ -33,6 +37,12 @@ CREATE TABLE IF NOT EXISTS areas (
     facility_id TEXT NOT NULL REFERENCES facilities(id),
     name TEXT NOT NULL,
     commodity TEXT NOT NULL DEFAULT 'General Produce',
+    cold_store_name TEXT DEFAULT 'Cold Store A',
+    zone_name TEXT DEFAULT 'North Zone',
+    rack_name TEXT DEFAULT 'Rack 1',
+    pos_x REAL DEFAULT 20.0,
+    pos_y REAL DEFAULT 20.0,
+    pos_z REAL DEFAULT 2.0,
     health_status TEXT NOT NULL DEFAULT 'normal',
     health_score REAL NOT NULL DEFAULT 100.0,
     health_reasons TEXT DEFAULT '[]',
@@ -43,24 +53,45 @@ CREATE TABLE IF NOT EXISTS gateways (
     id TEXT PRIMARY KEY,
     facility_id TEXT NOT NULL REFERENCES facilities(id),
     name TEXT NOT NULL,
+    gateway_type TEXT DEFAULT 'INNER_GATEWAY', -- 'INNER_GATEWAY', 'OUTER_GATEWAY'
+    connection_type TEXT DEFAULT 'RS485',      -- 'RS485', 'Ethernet', 'Serial'
+    paired_gateway_id TEXT,
     ip_address TEXT,
     mac_address TEXT,
-    firmware_version TEXT DEFAULT 'v1.4.2',
+    firmware_version TEXT DEFAULT 'v2.1.0',
     is_online INTEGER NOT NULL DEFAULT 1,
     last_heartbeat TEXT NOT NULL,
     local_network_ssid TEXT,
     status_detail TEXT DEFAULT 'Active monitoring',
+    buffer_capacity INTEGER DEFAULT 5000,
+    buffered_count INTEGER DEFAULT 0,
+    internet_online INTEGER DEFAULT 1,
+    wired_link_status TEXT DEFAULT 'connected',
     created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS esp_devices (
     id TEXT PRIMARY KEY,
+    hardware_id TEXT,                         -- Unique hardware MAC address
+    device_code TEXT,                         -- Stable logical ID (e.g. AGR-ESP-001)
+    device_type TEXT DEFAULT 'SENSOR_NODE',   -- 'SENSOR_NODE', 'INNER_GATEWAY', 'OUTER_GATEWAY'
+    registration_status TEXT DEFAULT 'active',-- 'pending', 'active', 'rejected', 'revoked'
     facility_id TEXT NOT NULL REFERENCES facilities(id),
+    cold_store_name TEXT DEFAULT 'Cold Store A',
+    zone_name TEXT DEFAULT 'North Zone',
     area_id TEXT REFERENCES areas(id),
+    rack_name TEXT DEFAULT 'Rack 1',
+    level_name TEXT DEFAULT 'Level 1',
+    pos_x REAL DEFAULT 20.0,
+    pos_y REAL DEFAULT 20.0,
+    pos_z REAL DEFAULT 2.0,
     gateway_id TEXT REFERENCES gateways(id),
+    parent_gateway_id TEXT,                   -- Inner Gateway ID
+    parent_node_id TEXT,                      -- Mesh repeater/parent node ID
+    connection_protocol TEXT DEFAULT 'ESP-NOW',
     user_name TEXT NOT NULL,
     hardware_type TEXT NOT NULL DEFAULT 'ESP32-DevKit-V1',
-    firmware_version TEXT NOT NULL DEFAULT '1.2.0',
+    firmware_version TEXT NOT NULL DEFAULT '1.4.0',
     ip_address TEXT,
     mac_address TEXT,
     is_online INTEGER NOT NULL DEFAULT 1,
@@ -69,6 +100,7 @@ CREATE TABLE IF NOT EXISTS esp_devices (
     battery_voltage REAL DEFAULT 3.3,
     is_enabled INTEGER NOT NULL DEFAULT 1,
     is_discovered INTEGER NOT NULL DEFAULT 0,
+    is_simulated INTEGER DEFAULT 0,
     installation_date TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
@@ -103,12 +135,15 @@ CREATE TABLE IF NOT EXISTS sensor_readings (
     calibrated_value REAL NOT NULL,
     unit TEXT NOT NULL,
     is_simulation INTEGER NOT NULL DEFAULT 0,
+    is_buffered INTEGER NOT NULL DEFAULT 0,
+    buffered_at TEXT,
     recorded_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_readings_sensor_time ON sensor_readings(sensor_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_readings_area_time ON sensor_readings(area_id, recorded_at DESC);
 CREATE INDEX IF NOT EXISTS idx_readings_type_time ON sensor_readings(sensor_type, recorded_at DESC);
+CREATE INDEX IF NOT EXISTS idx_readings_device_time ON sensor_readings(device_id, recorded_at DESC);
 
 CREATE TABLE IF NOT EXISTS thresholds (
     id TEXT PRIMARY KEY,

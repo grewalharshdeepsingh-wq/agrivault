@@ -70,19 +70,19 @@ router.get('/health', (req: Request, res: Response): void => {
         status: 'healthy',
         activeClients: wsClients
       },
-      directCloudIngest: {
+      cloudIngest: {
         status: 'healthy',
-        protocol: 'Direct Internet (HTTP REST & MQTT)',
+        protocol: 'Multi-Tier Cloud Pipeline (RS-485 Wired Link -> Outer Gateway -> Cloud)',
         endpoint: '/api/devices/telemetry',
-        mqttBrokerPort: 1883,
-        gatewayRequired: false
+        gatewayIngestEndpoint: '/api/gateways/telemetry',
+        mqttBrokerPort: 1883
       },
       gateway: {
-        status: 'retired',
-        mode: 'Direct Internet Architecture (No Gateway Required)',
-        totalGateways: 0,
-        onlineGateways: 0,
-        details: []
+        status: onlineGateways > 0 ? 'healthy' : 'warning',
+        architecture: 'Dual-Gateway Industrial Cold Storage Mesh (Inner Gateway + RS-485 + Outer Gateway)',
+        totalGateways: gateways.length,
+        onlineGateways,
+        details: gateways
       },
       espDevices: {
         status: onlineDevices === totalDevices ? 'healthy' : onlineDevices > 0 ? 'warning' : 'critical',

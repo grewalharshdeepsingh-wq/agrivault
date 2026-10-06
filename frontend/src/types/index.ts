@@ -49,6 +49,10 @@ export interface Facility {
   name: string;
   location: string;
   description?: string;
+  length_ft?: number;
+  width_ft?: number;
+  height_ft?: number;
+  dimensions_unit?: string;
   created_at: string;
 }
 
@@ -56,6 +60,9 @@ export interface Gateway {
   id: string;
   facility_id: string;
   name: string;
+  gateway_type?: 'INNER_GATEWAY' | 'OUTER_GATEWAY';
+  connection_type?: 'RS485' | 'Ethernet' | 'Serial';
+  paired_gateway_id?: string | null;
   ip_address?: string;
   mac_address?: string;
   firmware_version: string;
@@ -63,6 +70,52 @@ export interface Gateway {
   last_heartbeat: string;
   local_network_ssid?: string;
   status_detail: string;
+  buffer_capacity?: number;
+  buffered_count?: number;
+  internet_online?: number;
+  wired_link_status?: string;
+}
+
+export interface GatewayTopology {
+  internet: {
+    status: 'ONLINE' | 'OFFLINE';
+    lastChecked: string;
+  };
+  outerGateway: {
+    id: string;
+    name: string;
+    hardware_id: string;
+    status: 'ONLINE' | 'OFFLINE';
+    ipAddress?: string;
+    bufferedCount: number;
+    bufferCapacity: number;
+    lastHeartbeat: string;
+  };
+  wiredWallLink: {
+    transportType: string;
+    status: 'connected' | 'disconnected' | 'degraded';
+    protocol: string;
+    description: string;
+    maxThroughput: string;
+    latencyMs: number;
+  };
+  innerGateway: {
+    id: string;
+    name: string;
+    hardware_id: string;
+    status: 'ONLINE' | 'OFFLINE';
+    bufferedCount: number;
+    bufferCapacity: number;
+    wirelessProtocol: string;
+    lastHeartbeat: string;
+  };
+  wirelessNetwork: {
+    protocol: 'ESP-NOW';
+    totalNodes: number;
+    onlineNodes: number;
+    offlineNodes: number;
+    pendingNodes: number;
+  };
 }
 
 export interface Sensor {
@@ -86,9 +139,23 @@ export interface Sensor {
 
 export interface ESPDevice {
   id: string;
+  hardware_id?: string;
+  device_code?: string;
+  device_type?: 'SENSOR_NODE' | 'INNER_GATEWAY' | 'OUTER_GATEWAY' | 'RELAY_NODE';
+  registration_status?: 'pending' | 'active' | 'rejected' | 'revoked';
   facility_id: string;
+  cold_store_name?: string;
+  zone_name?: string;
   area_id: string | null;
-  gateway_id: string;
+  rack_name?: string;
+  level_name?: string;
+  pos_x?: number;
+  pos_y?: number;
+  pos_z?: number;
+  gateway_id?: string;
+  parent_gateway_id?: string;
+  parent_node_id?: string;
+  connection_protocol?: string;
   user_name: string;
   hardware_type: string;
   firmware_version: string;
@@ -100,6 +167,7 @@ export interface ESPDevice {
   battery_voltage: number;
   is_enabled: number;
   is_discovered: number;
+  is_simulated?: number;
   installation_date: string;
   area_name?: string;
   sensors?: Sensor[];

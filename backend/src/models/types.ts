@@ -22,6 +22,10 @@ export interface Facility {
   name: string;
   location: string;
   description?: string;
+  length_ft?: number;
+  width_ft?: number;
+  height_ft?: number;
+  dimensions_unit?: string;
   created_at: string;
 }
 
@@ -32,6 +36,12 @@ export interface Area {
   facility_id: string;
   name: string;
   commodity: string;
+  cold_store_name?: string;
+  zone_name?: string;
+  rack_name?: string;
+  pos_x?: number;
+  pos_y?: number;
+  pos_z?: number;
   health_status: HealthStatus;
   health_score: number;
   health_reasons: string[]; // parsed from JSON
@@ -42,6 +52,9 @@ export interface Gateway {
   id: string;
   facility_id: string;
   name: string;
+  gateway_type?: 'INNER_GATEWAY' | 'OUTER_GATEWAY';
+  connection_type?: 'RS485' | 'Ethernet' | 'Serial';
+  paired_gateway_id?: string | null;
   ip_address?: string;
   mac_address?: string;
   firmware_version: string;
@@ -49,14 +62,32 @@ export interface Gateway {
   last_heartbeat: string;
   local_network_ssid?: string;
   status_detail: string;
+  buffer_capacity?: number;
+  buffered_count?: number;
+  internet_online?: number;
+  wired_link_status?: string;
   created_at: string;
 }
 
 export interface ESPDevice {
   id: string;
+  hardware_id?: string;
+  device_code?: string;
+  device_type?: 'SENSOR_NODE' | 'INNER_GATEWAY' | 'OUTER_GATEWAY' | 'RELAY_NODE';
+  registration_status?: 'pending' | 'active' | 'rejected' | 'revoked';
   facility_id: string;
+  cold_store_name?: string;
+  zone_name?: string;
   area_id: string | null;
+  rack_name?: string;
+  level_name?: string;
+  pos_x?: number;
+  pos_y?: number;
+  pos_z?: number;
   gateway_id?: string | null;
+  parent_gateway_id?: string | null;
+  parent_node_id?: string | null;
+  connection_protocol?: 'ESP-NOW' | 'Wi-Fi' | 'RS-485';
   user_name: string;
   hardware_type: string;
   firmware_version: string;
@@ -68,6 +99,7 @@ export interface ESPDevice {
   battery_voltage: number;
   is_enabled: number;
   is_discovered: number;
+  is_simulated?: number;
   installation_date: string;
   created_at: string;
   area_name?: string;
@@ -117,6 +149,8 @@ export interface SensorReading {
   calibrated_value: number;
   unit: string;
   is_simulation: number;
+  is_buffered?: number;
+  buffered_at?: string;
   recorded_at: string;
 }
 
@@ -193,15 +227,23 @@ export interface AutomationRule {
 
 export interface TelemetryPayload {
   deviceId: string;
+  hardware_id?: string;
   timestamp?: string;
   temperature?: number;
   humidity?: number;
+  mq3?: number;
+  mq135?: number;
   co2?: number;
   ethylene?: number;
   ammonia?: number;
   ethanol?: number;
   battery?: number;
   rssi?: number;
+  parent_gateway_id?: string;
+  parent_node_id?: string;
+  is_buffered?: boolean;
+  buffered_at?: string;
   raw?: Record<string, number>;
   is_simulation?: boolean;
 }
+

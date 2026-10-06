@@ -82,30 +82,39 @@ export function handleDeviceStatus(
   let dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
 
   if (!dev) {
-    // 1. AUTO-DISCOVER NEW DEVICE OVER INTERNET!
+    // 1. AUTO-DISCOVER NEW DEVICE
     const isEsp8266 = cleanId.includes('8266') || (payload.hardwareType && payload.hardwareType.toUpperCase().includes('8266'));
     const hwType = payload.hardwareType || (isEsp8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
     const mac = payload.macAddress || (isEsp8266 ? `5C:CF:7F:00:00:01` : `24:0A:C4:00:00:01`);
     const defaultName = `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${cleanId}`;
     const validGw = gatewayId ? db.get('SELECT id FROM gateways WHERE id = ?', gatewayId) : null;
-    const finalGatewayId = validGw ? gatewayId : null;
+    const finalGatewayId = validGw ? gatewayId : 'GW-INNER-01';
 
     const assignedAreaId = globalMeshAssignments.get(cleanId) || null;
     const isDiscovered = assignedAreaId ? 0 : 1;
+    const regStatus = assignedAreaId ? 'active' : 'pending';
+    const isSim = (payload as any).is_simulation ? 1 : 0;
 
     db.run(
       `INSERT INTO esp_devices (
-        id, facility_id, area_id, gateway_id, user_name, hardware_type,
+        id, hardware_id, device_code, device_type, registration_status, facility_id, area_id, gateway_id,
+        parent_gateway_id, connection_protocol, user_name, hardware_type,
         firmware_version, ip_address, mac_address, is_online, last_heartbeat,
-        signal_rssi, battery_voltage, is_enabled, is_discovered, installation_date, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        signal_rssi, battery_voltage, is_enabled, is_discovered, is_simulated, installation_date, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       cleanId,
+      mac,
+      cleanId,
+      'SENSOR_NODE',
+      regStatus,
       facilityId,
       assignedAreaId,
       finalGatewayId,
+      'GW-INNER-01',
+      'ESP-NOW',
       defaultName,
       hwType,
-      payload.firmwareVersion || '1.3.0-ota',
+      payload.firmwareVersion || '1.4.0',
       payload.ipAddress || '192.168.1.199',
       mac,
       1,
@@ -114,12 +123,13 @@ export function handleDeviceStatus(
       payload.battery || 3.3,
       1,
       isDiscovered,
+      isSim,
       now.split('T')[0],
       now
     );
 
     // Auto-create sensor rows for reported capabilities
-    const caps = payload.capabilities || ['temperature', 'humidity', 'co2', 'ammonia', 'ethanol'];
+    const caps = payload.capabilities || ['temperature', 'humidity', 'mq3', 'mq135', 'co2', 'ammonia', 'ethanol'];
     for (const cap of caps) {
       if (cap === 'relay') continue;
       const sId = `sens-${cleanId}-${cap}`;
@@ -127,6 +137,8 @@ export function handleDeviceStatus(
       let pin = isEsp8266 ? 'D1 (GPIO 5)' : 'GPIO 35';
       if (cap === 'temperature') { unit = '°C'; pin = isEsp8266 ? 'D2 (GPIO 4)' : 'GPIO 4'; }
       if (cap === 'humidity') { unit = '%'; pin = isEsp8266 ? 'D7 (GPIO 13)' : 'GPIO 32'; }
+      if (cap === 'mq3') { unit = 'ppm'; pin = 'GPIO 35'; }
+      if (cap === 'mq135') { unit = 'ppm'; pin = 'GPIO 34'; }
       if (cap === 'ethanol') { pin = isEsp8266 ? 'A0 (ADC0)' : 'GPIO 34'; }
 
       db.run(
@@ -186,8 +198,11 @@ export function handleDeviceTelemetry(
     db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', assignedAreaId, canonicalId);
   }
   const isSimulation = payload.is_simulation ? 1 : 0;
+  const isBuffered = payload.is_buffered ? 1 : 0;
+  const recordedAt = payload.timestamp || now;
+  const bufferedAt = payload.buffered_at || (isBuffered ? now : null);
 
-  const supportedSensors = ['temperature', 'humidity', 'co2', 'ethylene', 'ammonia', 'ethanol', 'voc'];
+  const supportedSensors = ['temperature', 'humidity', 'mq3', 'mq135', 'co2', 'ethylene', 'ammonia', 'ethanol', 'voc'];
   const updatedSensors: any[] = [];
 
   for (const param of supportedSensors) {
@@ -212,7 +227,7 @@ export function handleDeviceTelemetry(
             raw_reading = ?, calibrated_reading = ?, rate_of_change = ?,
             area_id = ?, last_reading_time = ?
           WHERE id = ?`,
-          rawVal, val, roc, areaId, now, sensorId
+          rawVal, val, roc, areaId, recordedAt, sensorId
         );
       } else {
         let unit = 'ppm';
@@ -226,16 +241,16 @@ export function handleDeviceTelemetry(
             calibration_status, confidence_score, sensor_health, last_reading_time, created_at
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           sensorId, canonicalId, areaId, param, `${param.toUpperCase()} Probe`, unit, 'GPIO',
-          rawVal, val, roc, '30 min', 'calibrated', 95.0, 'healthy', now, now
+          rawVal, val, roc, '30 min', 'calibrated', 95.0, 'healthy', recordedAt, now
         );
       }
 
-      // Append time-series history
+      // Append time-series history (preserving original hardware timestamp if buffered)
       db.run(
         `INSERT INTO sensor_readings (
-          id, sensor_id, device_id, area_id, sensor_type, raw_value, calibrated_value, unit, is_simulation, recorded_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        uuidv4(), sensorId, canonicalId, areaId, param, rawVal, val, prevSensor?.unit || 'ppm', isSimulation, now
+          id, sensor_id, device_id, area_id, sensor_type, raw_value, calibrated_value, unit, is_simulation, is_buffered, buffered_at, recorded_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        uuidv4(), sensorId, canonicalId, areaId, param, rawVal, val, prevSensor?.unit || (param === 'temperature' ? '°C' : param === 'humidity' ? '%' : 'ppm'), isSimulation, isBuffered, bufferedAt, recordedAt
       );
 
       // Evaluate Thresholds & Alerts

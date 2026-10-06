@@ -27,6 +27,7 @@ import reportRoutes from './routes/reports.js';
 import systemRoutes from './routes/system.js';
 import simulationRoutes from './routes/simulation.js';
 import analyticsRoutes from './routes/analytics.js';
+import gatewayRoutes from './routes/gateways.js';
 
 dotenv.config();
 
@@ -126,7 +127,8 @@ const apiRoutes: [string, any][] = [
   ['/reports', reportRoutes],
   ['/analytics', analyticsRoutes],
   ['/system', systemRoutes],
-  ['/simulation', simulationRoutes]
+  ['/simulation', simulationRoutes],
+  ['/gateways', gatewayRoutes]
 ];
 
 for (const [routePath, handler] of apiRoutes) {

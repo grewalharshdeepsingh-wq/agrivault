@@ -25,8 +25,15 @@ import {
   Check,
   Trash2,
   Settings2,
-  Edit2
+  Edit2,
+  MapPin,
+  Search,
+  Filter,
+  Cable
 } from 'lucide-react';
+import { NetworkTopologyBar } from '../components/NetworkTopologyBar';
+import { ColdStoreMap } from '../components/ColdStoreMap';
+import { DeviceConfigureModal } from '../components/DeviceConfigureModal';
 
 interface DashboardProps {
   onSelectArea: (areaId: string) => void;
@@ -64,6 +71,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([]);
   const [allDevices, setAllDevices] = useState<ESPDevice[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Tab & Hardware Management State
+  const [activeTab, setActiveTab] = useState<'rooms' | 'map' | 'nodes'>('rooms');
+  const [configuringDevice, setConfiguringDevice] = useState<ESPDevice | null>(null);
+  const [nodeSearch, setNodeSearch] = useState('');
+  const [nodeZoneFilter, setNodeZoneFilter] = useState('all');
+  const [nodeStatusFilter, setNodeStatusFilter] = useState<'all' | 'online' | 'offline' | 'pending'>('all');
 
   // Load all available ESP devices for assignment
   const fetchDevices = async () => {
@@ -265,6 +279,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Real-Time Hardware Architecture & Network Topology Bar */}
+      <NetworkTopologyBar onFlushBuffer={() => { refreshOverview(); fetchDevices(); }} />
+
       {/* Top Facility Banner */}
       <div className="bg-gradient-to-r from-vault-900 via-vault-850 to-vault-900 border border-vault-800 rounded-2xl p-5 lg:p-6 shadow-xl relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-96 bg-gradient-to-l from-agri-500/5 to-transparent pointer-events-none"></div>
@@ -315,23 +332,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <span className="text-[10px] text-vault-500">Monitored Zones</span>
           </div>
 
-          {/* Connected ESPs */}
+          {/* Total ESP Nodes */}
           <div
-            onClick={onNavigateToDevices}
+            onClick={() => setActiveTab('nodes')}
             className="bg-vault-950/70 border border-vault-800/80 rounded-xl p-3 cursor-pointer hover:border-vault-700 transition"
           >
             <div className="flex items-center justify-between text-vault-400 text-xs mb-1">
-              <span>Connected ESPs</span>
+              <span>Total ESP Nodes</span>
               <Cpu className="w-3.5 h-3.5 text-agri-400" />
             </div>
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold font-mono text-white">{connectedESPs}</span>
+              <span className="text-2xl font-bold font-mono text-white">{allDevices.length}</span>
               {offlineESPs > 0 && (
                 <span className="text-xs font-mono text-rose-400 font-semibold">({offlineESPs} off)</span>
               )}
             </div>
             <span className="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-              <Globe className="w-2.5 h-2.5" /> Direct Internet (WAN)
+              <Radio className="w-2.5 h-2.5 text-agri-400" /> ESP-NOW Mesh ({connectedESPs} on)
             </span>
           </div>
 
@@ -418,130 +435,343 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Discovered / Available ESPs Quick Prompt */}
-      {pendingDiscoveredESPs.length > 0 && (
-        <div className="bg-gradient-to-r from-indigo-950/60 via-vault-900 to-indigo-950/60 border border-indigo-500/50 rounded-2xl p-4 shadow-xl">
+      {/* New Device Detected / Pending Registration Banner */}
+      {allDevices.filter(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id)).length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/70 via-vault-900 to-amber-950/70 border border-amber-500/60 rounded-2xl p-4 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40">
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </div>
               <div>
                 <p className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>{pendingDiscoveredESPs.length} Available ESP Node{pendingDiscoveredESPs.length > 1 ? 's' : ''} Connected Over Internet</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500 text-white">
-                    READY FOR ROOM SETUP
+                  <span>New Device Detected ({allDevices.filter(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id)).length} Pending Approval)</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-black">
+                    PENDING REGISTRATION
                   </span>
                 </p>
-                <p className="text-xs text-indigo-200/90 mt-0.5">
-                  Microcontrollers detected via direct Wi-Fi/WAN link and streaming telemetry. Assign them to a storage room.
+                <p className="text-xs text-amber-200/90 mt-0.5">
+                  Microcontroller detected via Inner Gateway (ESP-NOW). Secure authorization requires assigning device ID, name, and zone before activating telemetry.
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={openCreateModal}
-                className="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow transition"
-              >
-                + Create Room for Device
-              </button>
-              <button
-                onClick={onNavigateToDevices}
-                className="px-3.5 py-1.5 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-medium border border-vault-700 transition"
-              >
-                View Available Fleet
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                const firstPending = allDevices.find(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id));
+                if (firstPending) setConfiguringDevice(firstPending);
+              }}
+              className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-black font-extrabold text-xs shadow-md transition shrink-0"
+            >
+              Configure & Approve
+            </button>
           </div>
 
-          <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-indigo-500/20">
-            {pendingDiscoveredESPs.map((d) => {
-              const dev8266 = (d.hardware_type || '').includes('8266') || d.id.includes('8266');
-              return (
+          <div className="flex flex-wrap gap-2.5 mt-3 pt-3 border-t border-amber-500/20">
+            {allDevices
+              .filter(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id))
+              .map((d) => (
                 <div
                   key={d.id}
-                  className="bg-vault-950/90 border border-indigo-500/30 rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-2"
+                  className="bg-vault-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-3 shadow"
                 >
-                  <span
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
-                      dev8266
-                        ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
-                        : 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
-                    }`}
-                  >
-                    {dev8266 ? 'ESP8266' : 'ESP32'}
-                  </span>
-                  <span className="font-semibold text-white">{d.user_name || d.id}</span>
-                  <span className="text-[10px] font-mono text-vault-400">({d.ip_address || 'Internet WAN'})</span>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                      {d.connection_protocol || 'ESP-NOW'}
+                    </span>
+                    <div>
+                      <span className="font-bold text-white block">{d.device_code || d.id}</span>
+                      <span className="text-[10px] font-mono text-vault-400">MAC: {d.hardware_id || d.mac_address || '24:0A:C4:XX:XX'}</span>
+                    </div>
+                  </div>
                   <button
-                    onClick={() => {
-                      setRoomName('');
-                      setRoomCommodity('Potato (Bulk Store)');
-                      setSelectedDeviceIds([d.id]);
-                      setShowAddRoomModal(true);
-                    }}
-                    className="ml-1 text-[11px] font-semibold text-indigo-400 hover:text-indigo-200 underline"
+                    onClick={() => setConfiguringDevice(d)}
+                    className="px-2.5 py-1 rounded bg-agri-600 hover:bg-agri-500 text-white font-bold text-xs shadow transition flex items-center gap-1"
                   >
-                    Assign
+                    <span>Configure</span>
                   </button>
                 </div>
-              );
-            })}
+              ))}
           </div>
         </div>
       )}
 
-      {/* Areas Section Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-white tracking-tight">Monitored Storage Rooms & Sections</h2>
-          <p className="text-xs text-vault-400">
-            Real-time multi-sensor values from assigned ESPs, rate-of-change, and section health.
-          </p>
+      {/* Main Tab Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-vault-800 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('rooms')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+              activeTab === 'rooms' ? 'bg-agri-600 text-white shadow-md' : 'text-vault-400 hover:text-white hover:bg-vault-800/60'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>Storage Rooms & Sections</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-white font-mono">{areas.length}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('map')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+              activeTab === 'map' ? 'bg-agri-600 text-white shadow-md' : 'text-vault-400 hover:text-white hover:bg-vault-800/60'
+            }`}
+          >
+            <MapPin className="w-4 h-4" />
+            <span>Cold Store 2D Layout Map</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-white font-mono">
+              {facility?.length_ft || 162}×{facility?.width_ft || 94} ft
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('nodes')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
+              activeTab === 'nodes' ? 'bg-agri-600 text-white shadow-md' : 'text-vault-400 hover:text-white hover:bg-vault-800/60'
+            }`}
+          >
+            <Cpu className="w-4 h-4" />
+            <span>All ESP Hardware Nodes</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-white font-mono">{allDevices.length}</span>
+          </button>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="px-3 py-1.5 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow transition"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Add Room</span>
-        </button>
+
+        {activeTab === 'rooms' && (
+          <button
+            onClick={openCreateModal}
+            className="px-3 py-1.5 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow transition"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add Room</span>
+          </button>
+        )}
       </div>
 
-      {/* Area Cards Grid */}
-      {areas.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
-          {areas.map((area: any) => (
-            <AreaCard
-              key={area.id}
-              area={area}
-              onClick={() => onSelectArea(area.id)}
-              onEditArea={() => openEditModal(area)}
-              onDeleteArea={() => handleDeleteAreaDirect(area)}
-              onUnassignDevice={(devId, devName) => handleUnassignDeviceDirect(devId, devName)}
-              onDeleteDevice={(devId, devName) => handleDeleteDeviceDirect(devId, devName)}
-            />
-          ))}
+      {/* TAB 1: Storage Rooms & Sections (Card Grid) */}
+      {activeTab === 'rooms' && (
+        <div>
+          {areas.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
+              {areas.map((area: any) => (
+                <AreaCard
+                  key={area.id}
+                  area={area}
+                  onClick={() => onSelectArea(area.id)}
+                  onEditArea={() => openEditModal(area)}
+                  onDeleteArea={() => handleDeleteAreaDirect(area)}
+                  onUnassignDevice={(devId, devName) => handleUnassignDeviceDirect(devId, devName)}
+                  onDeleteDevice={(devId, devName) => handleDeleteDeviceDirect(devId, devName)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-vault-900/60 border border-dashed border-vault-800 rounded-2xl p-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-vault-800/80 border border-vault-700/80 text-vault-400 mx-auto flex items-center justify-center">
+                <Layers className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-white">No Monitored Rooms Configured Yet</h3>
+              <p className="text-xs text-vault-400 max-w-md mx-auto">
+                Click "+ Add Room" to create your storage room section and assign an ESP32 node to begin monitoring.
+              </p>
+              <div className="pt-2">
+                <button
+                  onClick={openCreateModal}
+                  className="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold shadow transition inline-flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Add Your First Room</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="bg-vault-900/60 border border-dashed border-vault-800 rounded-2xl p-8 text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-vault-800/80 border border-vault-700/80 text-vault-400 mx-auto flex items-center justify-center">
-            <Layers className="w-6 h-6" />
+      )}
+
+      {/* TAB 2: Cold Store 2D Spatial Layout Map */}
+      {activeTab === 'map' && (
+        <ColdStoreMap
+          facility={facility}
+          devices={allDevices}
+          onSelectDevice={(id) => {
+            const d = allDevices.find(x => x.id === id);
+            if (d) setConfiguringDevice(d);
+          }}
+          onRefreshFacility={() => {
+            refreshOverview();
+            fetchDevices();
+          }}
+        />
+      )}
+
+      {/* TAB 3: All ESP Hardware Nodes (Comprehensive Table & Filter) */}
+      {activeTab === 'nodes' && (
+        <div className="bg-vault-900 border border-vault-800 rounded-2xl p-5 shadow-xl space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight">ESP32 & ESP8266 Physical Fleet</h3>
+              <p className="text-xs text-vault-400">
+                Individual hardware nodes transmitting DS18B20 temp, DHT11 humidity, MQ3, and MQ135 sensor streams.
+              </p>
+            </div>
+
+            {/* Filter Controls */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-vault-400" />
+                <input
+                  type="text"
+                  placeholder="Search Node, MAC, or Rack..."
+                  value={nodeSearch}
+                  onChange={(e) => setNodeSearch(e.target.value)}
+                  className="bg-vault-950 border border-vault-800 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-vault-500 focus:outline-none focus:border-agri-500 w-52"
+                />
+              </div>
+
+              <select
+                value={nodeStatusFilter}
+                onChange={(e) => setNodeStatusFilter(e.target.value as any)}
+                className="bg-vault-950 border border-vault-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-agri-500"
+              >
+                <option value="all">All Statuses</option>
+                <option value="online">Online Only</option>
+                <option value="offline">Offline Only</option>
+                <option value="pending">Pending Approval</option>
+              </select>
+            </div>
           </div>
-          <h3 className="text-base font-bold text-white">No Monitored Rooms Configured Yet</h3>
-          <p className="text-xs text-vault-400 max-w-md mx-auto">
-            {pendingDiscoveredESPs.length > 0
-              ? 'An ESP is connected and waiting to be assigned! Click "+ Add Room" below to name your room and link the device.'
-              : 'Power on your ESP32 or ESP8266. Once it connects to Wi-Fi, it will be detected automatically so you can assign it to a room.'}
-          </p>
-          <div className="pt-2">
-            <button
-              onClick={openCreateModal}
-              className="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold shadow transition inline-flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>+ Add Your First Room</span>
-            </button>
+
+          {/* Nodes Table */}
+          <div className="overflow-x-auto rounded-xl border border-vault-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-vault-950/80 text-vault-400 font-semibold border-b border-vault-800">
+                <tr>
+                  <th className="py-2.5 px-3">Node / Device ID</th>
+                  <th className="py-2.5 px-3">Hardware MAC</th>
+                  <th className="py-2.5 px-3">Zone & Rack</th>
+                  <th className="py-2.5 px-3">Temperature</th>
+                  <th className="py-2.5 px-3">Humidity</th>
+                  <th className="py-2.5 px-3">MQ3 Gas</th>
+                  <th className="py-2.5 px-3">MQ135 Gas</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3">Signal</th>
+                  <th className="py-2.5 px-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-vault-800/60 font-mono">
+                {allDevices
+                  .filter((d) => {
+                    const matchesSearch =
+                      !nodeSearch ||
+                      d.user_name.toLowerCase().includes(nodeSearch.toLowerCase()) ||
+                      d.id.toLowerCase().includes(nodeSearch.toLowerCase()) ||
+                      (d.hardware_id && d.hardware_id.toLowerCase().includes(nodeSearch.toLowerCase())) ||
+                      (d.rack_name && d.rack_name.toLowerCase().includes(nodeSearch.toLowerCase()));
+
+                    const matchesStatus =
+                      nodeStatusFilter === 'all' ||
+                      (nodeStatusFilter === 'online' && d.is_online === 1) ||
+                      (nodeStatusFilter === 'offline' && d.is_online === 0) ||
+                      (nodeStatusFilter === 'pending' && d.registration_status === 'pending');
+
+                    return matchesSearch && matchesStatus;
+                  })
+                  .map((d) => {
+                    const temp = d.sensors?.find((s) => s.sensor_type === 'temperature')?.calibrated_reading;
+                    const hum = d.sensors?.find((s) => s.sensor_type === 'humidity')?.calibrated_reading;
+                    const mq3 = d.sensors?.find((s) => s.sensor_type === 'mq3' || s.sensor_type === 'ethanol')?.calibrated_reading;
+                    const mq135 = d.sensors?.find((s) => s.sensor_type === 'mq135' || s.sensor_type === 'ammonia')?.calibrated_reading;
+                    const isPending = d.registration_status === 'pending';
+
+                    return (
+                      <tr key={d.id} className="hover:bg-vault-800/30 transition font-sans">
+                        <td className="py-2.5 px-3 font-medium text-white">
+                          <div className="flex items-center gap-1.5">
+                            <Cpu className="w-3.5 h-3.5 text-agri-400 shrink-0" />
+                            <div>
+                              <span className="font-bold block">{d.user_name || d.id}</span>
+                              <span className="text-[10px] font-mono text-agri-400 font-bold">{d.device_code || d.id}</span>
+                              {d.is_simulated === 1 && (
+                                <span className="ml-1 text-[9px] font-mono px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-bold">
+                                  SIMULATED
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-vault-300">
+                          {d.hardware_id || d.mac_address || '--'}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs text-vault-300">
+                          <div>
+                            <span className="font-semibold text-white">{d.zone_name || 'North Zone'}</span>
+                            <span className="block text-[10px] text-vault-400">
+                              {d.rack_name || 'Rack 1'} • {d.level_name || 'Level 1'}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-xs">
+                          {temp !== undefined && d.is_online === 1 ? (
+                            <span className={temp > 6 ? 'text-rose-400' : 'text-emerald-400'}>
+                              {temp.toFixed(1)}°C
+                            </span>
+                          ) : (
+                            <span className="text-vault-500">--</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-xs">
+                          {hum !== undefined && d.is_online === 1 ? (
+                            <span className="text-sky-400">{Math.round(hum)}%</span>
+                          ) : (
+                            <span className="text-vault-500">--</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-xs">
+                          {mq3 !== undefined && d.is_online === 1 ? (
+                            <span className={mq3 > 1.8 ? 'text-amber-400 font-bold' : 'text-vault-300'}>
+                              {mq3.toFixed(2)} ppm
+                            </span>
+                          ) : (
+                            <span className="text-vault-500">--</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-xs">
+                          {mq135 !== undefined && d.is_online === 1 ? (
+                            <span className={mq135 > 50 ? 'text-amber-400 font-bold' : 'text-vault-300'}>
+                              {mq135.toFixed(1)} ppm
+                            </span>
+                          ) : (
+                            <span className="text-vault-500">--</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {isPending ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              PENDING
+                            </span>
+                          ) : d.is_online === 1 ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                              ONLINE
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                              OFFLINE
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-vault-400">
+                          {d.signal_rssi ? `${d.signal_rssi} dBm` : '--'}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          <button
+                            onClick={() => setConfiguringDevice(d)}
+                            className="px-2.5 py-1 rounded-md bg-vault-800 hover:bg-vault-700 text-vault-200 text-xs font-semibold border border-vault-700 transition"
+                          >
+                            Configure
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
@@ -814,31 +1044,43 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       )}
 
-      {/* Direct Cloud IoT Architecture Notice */}
+      {/* Device Configuration & Registration Approval Modal */}
+      <DeviceConfigureModal
+        device={configuringDevice}
+        areas={areas}
+        isOpen={Boolean(configuringDevice)}
+        onClose={() => setConfiguringDevice(null)}
+        onSaved={() => {
+          refreshOverview();
+          fetchDevices();
+        }}
+      />
+
+      {/* Industrial Hardware Architecture Notice */}
       <div className="bg-vault-900 border border-vault-800 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <Globe className="w-4 h-4" />
+          <div className="p-2 rounded-lg bg-agri-500/10 text-agri-400 border border-agri-500/20">
+            <Radio className="w-4 h-4" />
           </div>
           <div>
             <p className="font-semibold text-slate-200 flex items-center gap-2">
-              <span>Direct Cloud IoT Architecture</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                ZERO HARDWARE GATEWAY
+              <span>Industrial Multi-Tier IoT Architecture</span>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                ESP-NOW + RS-485 + PERIMETER GATEWAY
               </span>
             </p>
             <p className="text-vault-400">
-              ESP32 & ESP8266 nodes stream telemetry directly over Wi-Fi and Internet to cloud REST & MQTT endpoints.
+              Sensor Nodes (ESP-NOW) ➔ Inner Gateway (Vault Hub) ➔ RS-485 Wall Conduit ➔ Outer Gateway ➔ Cloud Engine.
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 self-start sm:self-center">
-          <span className="px-2.5 py-1 rounded bg-vault-950 border border-vault-800 text-[11px] font-mono text-agri-400">
-            REST /telemetry | MQTT :1883
+          <span className="px-2.5 py-1 rounded bg-vault-950 border border-vault-800 text-[11px] font-mono text-amber-400 flex items-center gap-1">
+            <Cable className="w-3 h-3" /> RS-485 Half-Duplex
           </span>
           <span className="flex items-center gap-1 px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-400 font-semibold text-[11px]">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            INTERNET LIVE
+            ACTIVE MONITORING
           </span>
         </div>
       </div>

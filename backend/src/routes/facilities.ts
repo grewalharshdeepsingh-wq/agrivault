@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../database/db.js';
 import { Facility, Area, Gateway, ESPDevice, Sensor, Alert } from '../models/types.js';
 import { authenticate, AuthRequest } from '../middleware/authMiddleware.js';
+import { gatewayManager } from '../hardware/gatewayManager.js';
 
 const router = Router();
 
@@ -172,10 +173,46 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
     avgTemp,
     avgHum,
     co2Status,
-    gasStatus,
     gateway: gateway || null,
+    gatewayTopology: gatewayManager.getTopology(),
     areas: enrichedAreas
   });
+});
+
+// PUT /api/facilities/:id
+// Update facility properties including dimensions (length, width, height)
+router.put('/:id', (req: Request, res: Response): void => {
+  const facilityId = req.params.id;
+  const { name, location, description, length_ft, width_ft, height_ft, dimensions_unit } = req.body;
+
+  const existing = db.get('SELECT * FROM facilities WHERE id = ?', facilityId);
+  if (!existing) {
+    res.status(404).json({ error: 'Facility not found' });
+    return;
+  }
+
+  db.run(
+    `UPDATE facilities SET
+      name = COALESCE(?, name),
+      location = COALESCE(?, location),
+      description = COALESCE(?, description),
+      length_ft = COALESCE(?, length_ft),
+      width_ft = COALESCE(?, width_ft),
+      height_ft = COALESCE(?, height_ft),
+      dimensions_unit = COALESCE(?, dimensions_unit)
+    WHERE id = ?`,
+    name !== undefined ? name : null,
+    location !== undefined ? location : null,
+    description !== undefined ? description : null,
+    length_ft !== undefined ? Number(length_ft) : null,
+    width_ft !== undefined ? Number(width_ft) : null,
+    height_ft !== undefined ? Number(height_ft) : null,
+    dimensions_unit !== undefined ? dimensions_unit : null,
+    facilityId
+  );
+
+  const updated = db.get('SELECT * FROM facilities WHERE id = ?', facilityId);
+  res.json(updated);
 });
 
 // POST /api/facilities

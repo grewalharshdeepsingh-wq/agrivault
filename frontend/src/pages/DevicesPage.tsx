@@ -25,8 +25,10 @@ import {
   ExternalLink,
   Layers,
   Check,
-  Unlink
+  Unlink,
+  ShieldAlert
 } from 'lucide-react';
+import { DeviceConfigureModal } from '../components/DeviceConfigureModal';
 
 export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = ({ onSelectDevice }) => {
   const { overview, refreshOverview } = useApp();
@@ -35,16 +37,15 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'online' | 'offline'>('all');
+  const [regFilter, setRegFilter] = useState<'all' | 'active' | 'pending' | 'revoked'>('all');
   const [hardwareFilter, setHardwareFilter] = useState<'all' | 'esp32' | 'esp8266'>('all');
   const [availabilityFilter, setAvailabilityFilter] = useState<'all' | 'available' | 'assigned'>('all');
   const [isScanning, setIsScanning] = useState(false);
   const [scanningType, setScanningType] = useState<'ESP32' | 'ESP8266' | null>(null);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
 
-  // Edit / Assign Modal State
-  const [editingDevice, setEditingDevice] = useState<ESPDevice | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editAreaId, setEditAreaId] = useState('');
+  // Configuration Modal State
+  const [configuringDevice, setConfiguringDevice] = useState<ESPDevice | null>(null);
 
   const canEdit = role === 'Owner' || role === 'Admin' || role === 'Operator';
 
@@ -79,22 +80,6 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
     }
   };
 
-  const handleSaveDevice = async () => {
-    if (!editingDevice) return;
-    try {
-      await api.updateDevice(editingDevice.id, {
-        userName: editName,
-        areaId: editAreaId || null,
-        isDiscovered: editAreaId ? 0 : 1
-      });
-      setEditingDevice(null);
-      await loadDevices();
-      await refreshOverview();
-    } catch (err: any) {
-      alert(`Failed to update device: ${err.message}`);
-    }
-  };
-
   const handleUnassignDevice = async (id: string, name: string) => {
     if (!confirm(`Are you sure you want to unassign "${name}" from its room? It will return to the available fleet.`)) return;
     try {
@@ -117,6 +102,28 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
     }
   };
 
+  const handleRejectDevice = async (id: string, name: string) => {
+    if (!confirm(`Reject discovery of "${name}" (${id})? It will be removed from pending list.`)) return;
+    try {
+      await api.rejectDevice(id);
+      await loadDevices();
+      await refreshOverview();
+    } catch (err: any) {
+      alert(`Failed to reject device: ${err.message}`);
+    }
+  };
+
+  const handleRevokeDevice = async (id: string, name: string) => {
+    if (!confirm(`Revoke authorization for "${name}" (${id})? It will be moved to REVOKED state.`)) return;
+    try {
+      await api.revokeDevice(id);
+      await loadDevices();
+      await refreshOverview();
+    } catch (err: any) {
+      alert(`Failed to revoke device: ${err.message}`);
+    }
+  };
+
   const areas: Area[] = overview?.areas || [];
 
   const is8266 = (d: ESPDevice) =>
@@ -127,13 +134,21 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
     const matchesSearch =
       d.user_name.toLowerCase().includes(search.toLowerCase()) ||
       d.id.toLowerCase().includes(search.toLowerCase()) ||
+      (d.hardware_id || '').toLowerCase().includes(search.toLowerCase()) ||
       (d.area_name || '').toLowerCase().includes(search.toLowerCase()) ||
+      (d.zone_name || '').toLowerCase().includes(search.toLowerCase()) ||
       (d.hardware_type || '').toLowerCase().includes(search.toLowerCase());
 
     const matchesStatus =
       statusFilter === 'all' ||
       (statusFilter === 'online' && d.is_online === 1) ||
       (statusFilter === 'offline' && d.is_online === 0);
+
+    const matchesReg =
+      regFilter === 'all' ||
+      (regFilter === 'active' && (!d.registration_status || d.registration_status === 'active')) ||
+      (regFilter === 'pending' && d.registration_status === 'pending') ||
+      (regFilter === 'revoked' && d.registration_status === 'revoked');
 
     const matchesHardware =
       hardwareFilter === 'all' ||
@@ -146,10 +161,11 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       (availabilityFilter === 'available' && isAvailable) ||
       (availabilityFilter === 'assigned' && !isAvailable);
 
-    return matchesSearch && matchesStatus && matchesHardware && matchesAvailability;
+    return matchesSearch && matchesStatus && matchesReg && matchesHardware && matchesAvailability;
   });
 
-  const availableDevices = devices.filter((d) => !d.area_id);
+  const pendingDevices = devices.filter((d) => d.registration_status === 'pending');
+  const availableDevices = devices.filter((d) => !d.area_id && d.registration_status !== 'pending');
   const esp32Count = devices.filter((d) => !is8266(d)).length;
   const esp8266Count = devices.filter((d) => is8266(d)).length;
 
@@ -204,6 +220,70 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
         </div>
       </div>
 
+      {/* Pending Provisioning Requests Banner (Security Gate) */}
+      {pendingDevices.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/70 via-vault-900 to-amber-950/70 border border-amber-500/60 rounded-2xl p-4 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                <ShieldCheck className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  <span>New Hardware Nodes Pending Admin Provisioning</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-black">
+                    {pendingDevices.length} PENDING
+                  </span>
+                </h4>
+                <p className="text-xs text-amber-200/90 mt-0.5">
+                  Untrusted sensor nodes detected by the Inner Gateway. For security, nodes must be approved and assigned before full telemetry ingestion.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setRegFilter('pending')}
+              className="text-xs font-semibold text-amber-300 hover:text-white flex items-center gap-1 transition shrink-0"
+            >
+              <span>Review All Pending ({pendingDevices.length})</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-2 border-t border-amber-500/20">
+            {pendingDevices.slice(0, 3).map((dev) => (
+              <div
+                key={dev.id}
+                className="bg-vault-950/90 border border-amber-500/40 rounded-xl p-3 flex items-center justify-between gap-3 hover:border-amber-300 transition"
+              >
+                <div className="truncate">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-white truncate">{dev.user_name || dev.device_code || dev.id}</span>
+                    {dev.is_simulated ? (
+                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        SIM
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="text-[10px] font-mono text-amber-400/90 truncate">
+                    MAC: {dev.hardware_id || dev.id}
+                  </p>
+                </div>
+
+                {canEdit && (
+                  <button
+                    onClick={() => setConfiguringDevice(dev)}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold shrink-0 shadow transition flex items-center gap-1"
+                  >
+                    <span>Authorize</span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Available / Unassigned ESPs Highlight Banner */}
       {availableDevices.length > 0 && (
         <div className="bg-gradient-to-r from-indigo-950/60 via-vault-900 to-indigo-950/60 border border-indigo-500/50 rounded-2xl p-4 shadow-xl">
@@ -214,13 +294,13 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
               </div>
               <div>
                 <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Available ESP Nodes Detected Over Internet</span>
+                  <span>Available ESP Nodes Detected In Fleet</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500 text-white">
                     {availableDevices.length} READY
                   </span>
                 </h4>
                 <p className="text-xs text-indigo-200/90 mt-0.5">
-                  These microcontrollers have connected over Wi-Fi and are streaming live telemetry without room assignment.
+                  Approved microcontrollers streaming live telemetry without specific storage rack/zone assignment.
                 </p>
               </div>
             </div>
@@ -256,21 +336,17 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
                     <div className="truncate">
                       <p className="text-xs font-bold text-white truncate">{dev.user_name || dev.id}</p>
                       <p className="text-[10px] font-mono text-vault-400 truncate">
-                        {dev.id} • {dev.ip_address || 'Internet WAN'}
+                        {dev.hardware_id || dev.id}
                       </p>
                     </div>
                   </div>
 
                   {canEdit && (
                     <button
-                      onClick={() => {
-                        setEditingDevice(dev);
-                        setEditName(dev.user_name);
-                        setEditAreaId('');
-                      }}
+                      onClick={() => setConfiguringDevice(dev)}
                       className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold shrink-0 shadow transition"
                     >
-                      Assign Room
+                      Configure
                     </button>
                   )}
                 </div>
@@ -287,7 +363,7 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
           <Search className="w-4 h-4 text-vault-400 absolute left-3 top-2.5" />
           <input
             type="text"
-            placeholder="Search by device ID, name, or room..."
+            placeholder="Search by ID, MAC, name, or room..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full bg-vault-950 border border-vault-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-vault-500 focus:outline-none focus:border-agri-500"
@@ -296,6 +372,32 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
         {/* Filter Badges */}
         <div className="flex flex-wrap items-center gap-3 text-xs">
+          {/* Registration Filter */}
+          <div className="flex items-center gap-1 bg-vault-950 p-1 rounded-lg border border-vault-800">
+            <span className="text-[10px] font-mono text-vault-500 uppercase px-1.5">Reg:</span>
+            {(['all', 'active', 'pending', 'revoked'] as const).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRegFilter(r)}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold uppercase transition ${
+                  regFilter === r
+                    ? r === 'pending'
+                      ? 'bg-amber-500 text-black font-bold'
+                      : r === 'revoked'
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-emerald-600 text-white'
+                    : 'text-vault-400 hover:text-white'
+                }`}
+              >
+                {r === 'all'
+                  ? 'All'
+                  : r === 'pending'
+                  ? `Pending (${pendingDevices.length})`
+                  : r}
+              </button>
+            ))}
+          </div>
+
           {/* Hardware filter */}
           <div className="flex items-center gap-1 bg-vault-950 p-1 rounded-lg border border-vault-800">
             <span className="text-[10px] font-mono text-vault-500 uppercase px-1.5">Chip:</span>
@@ -364,8 +466,8 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
           </div>
           <h3 className="text-base font-bold text-white">No ESP Devices Connected</h3>
           <p className="text-xs text-vault-400 max-w-md mx-auto">
-            No microcontrollers are currently transmitting. Power on your ESP32 or ESP8266 board connected to Wi-Fi. 
-            The moment it transmits to the server, it will appear here automatically under "Available Devices" ready to be named and assigned.
+            No microcontrollers are currently transmitting. Power on your ESP32 or ESP8266 node connected to the Inner Gateway via ESP-NOW or directly over Wi-Fi. 
+            Once discovered, new devices appear here under "Pending Provisioning" ready for administrator review.
           </p>
         </div>
       ) : filteredDevices.length === 0 ? (
@@ -375,234 +477,243 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredDevices.map((d) => {
-          const dev8266 = is8266(d);
-          const isAvailable = !d.area_id || d.is_discovered === 1;
+            const dev8266 = is8266(d);
+            const isPending = d.registration_status === 'pending';
+            const isRevoked = d.registration_status === 'revoked';
+            const isAvailable = (!d.area_id || d.is_discovered === 1) && !isPending;
 
-          return (
-            <div
-              key={d.id}
-              className={`bg-vault-900 rounded-xl border p-4 shadow-md transition flex flex-col justify-between ${
-                isAvailable
-                  ? 'border-indigo-500/60 bg-gradient-to-br from-vault-900 to-indigo-950/30'
-                  : d.is_online === 1
-                  ? 'border-vault-800 hover:border-vault-700'
-                  : 'border-rose-950/80 bg-rose-950/10'
-              }`}
-            >
-              <div>
-                {/* Card Top: Name, Hardware Badge, Online Status */}
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <h3 className="text-sm font-bold text-white tracking-tight">{d.user_name}</h3>
-                      {/* Chip for Hardware Model */}
-                      <span
-                        className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
-                          dev8266
-                            ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                            : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-                        }`}
-                      >
-                        {dev8266 ? 'ESP8266' : 'ESP32'}
-                      </span>
-                      {isAvailable && (
-                        <span className="text-[9px] font-mono uppercase bg-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/40">
-                          AVAILABLE
+            return (
+              <div
+                key={d.id}
+                className={`bg-vault-900 rounded-xl border p-4 shadow-md transition flex flex-col justify-between ${
+                  isPending
+                    ? 'border-amber-500/70 bg-gradient-to-br from-amber-950/20 via-vault-900 to-vault-900 ring-1 ring-amber-500/40'
+                    : isRevoked
+                    ? 'border-rose-900/80 bg-rose-950/20 opacity-80'
+                    : isAvailable
+                    ? 'border-indigo-500/60 bg-gradient-to-br from-vault-900 to-indigo-950/30'
+                    : d.is_online === 1
+                    ? 'border-vault-800 hover:border-vault-700'
+                    : 'border-rose-950/80 bg-rose-950/10'
+                }`}
+              >
+                <div>
+                  {/* Card Top: Name, Hardware Badge, Online Status */}
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="text-sm font-bold text-white tracking-tight">
+                          {d.user_name || d.device_code || d.id}
+                        </h3>
+
+                        {/* Simulated badge */}
+                        {d.is_simulated ? (
+                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                            [SIMULATED]
+                          </span>
+                        ) : null}
+
+                        {/* Chip for Hardware Model */}
+                        <span
+                          className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border ${
+                            dev8266
+                              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                              : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+                          }`}
+                        >
+                          {dev8266 ? 'ESP8266' : 'ESP32'}
                         </span>
-                      )}
+
+                        {/* Registration Status Pill */}
+                        {isPending ? (
+                          <span className="text-[9px] font-mono font-bold uppercase bg-amber-500 text-black px-1.5 py-0.5 rounded shadow">
+                            PENDING REGISTRATION
+                          </span>
+                        ) : isRevoked ? (
+                          <span className="text-[9px] font-mono font-bold uppercase bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded border border-rose-500/40">
+                            REVOKED
+                          </span>
+                        ) : isAvailable ? (
+                          <span className="text-[9px] font-mono uppercase bg-indigo-500/30 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/40">
+                            AVAILABLE
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] font-mono text-vault-400">
+                          ID: {d.device_code || d.id}
+                        </span>
+                        <span className="text-[10px] font-mono text-vault-500">
+                          MAC: {d.hardware_id || 'ESP32-MAC'}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] font-mono text-vault-400">{d.id}</span>
-                      <span className="text-[10px] text-emerald-400 font-mono flex items-center gap-0.5">
-                        <Globe className="w-2.5 h-2.5" /> Direct Internet
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          d.is_online === 1 ? 'bg-emerald-400' : 'bg-rose-500'
+                        }`}
+                      ></span>
+                      <span className="text-[11px] font-mono font-semibold text-vault-300">
+                        {d.is_online === 1 ? 'ONLINE' : 'OFFLINE'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        d.is_online === 1 ? 'bg-emerald-400' : 'bg-rose-500'
-                      }`}
-                    ></span>
-                    <span className="text-[11px] font-mono font-semibold text-vault-300">
-                      {d.is_online === 1 ? 'ONLINE' : 'OFFLINE'}
+                  {/* Physical Hierarchy Location */}
+                  <div className="mb-3 text-xs bg-vault-950/70 p-2.5 rounded-lg border border-vault-800/80">
+                    <span className="text-vault-400 block text-[10px] uppercase font-mono mb-0.5">
+                      Facility Placement:
                     </span>
+                    <div className="font-semibold text-slate-200 text-[11px] flex items-center gap-1 flex-wrap">
+                      <span>{d.cold_store_name || 'Cold Store A'}</span>
+                      <span className="text-vault-500">›</span>
+                      <span>{d.zone_name || 'North Zone'}</span>
+                      <span className="text-vault-500">›</span>
+                      <span className="text-agri-400">{d.area_name || d.rack_name || 'Rack 1'}</span>
+                      {d.level_name ? (
+                        <>
+                          <span className="text-vault-500">›</span>
+                          <span className="text-vault-300">{d.level_name}</span>
+                        </>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
 
-                {/* Area mapping */}
-                <div className="mb-3 text-xs bg-vault-950/70 p-2.5 rounded-lg border border-vault-800/80 flex items-center justify-between">
-                  <div>
-                    <span className="text-vault-400 block text-[10px] uppercase font-mono">Assigned Storage Zone:</span>
-                    <span className="font-semibold text-slate-200">
-                      {d.area_name || <em className="text-amber-400 font-normal">Unassigned (Available on Standby)</em>}
-                    </span>
+                  {/* Hardware Specs & Transport Details */}
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-3 font-mono text-[11px]">
+                    <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
+                      <span className="text-vault-500 block text-[9px] uppercase">Gateway Link</span>
+                      <span className="text-slate-200 truncate block">
+                        {d.parent_gateway_id || 'GW-INNER-01 (ESP-NOW)'}
+                      </span>
+                    </div>
+                    <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
+                      <span className="text-vault-500 block text-[9px] uppercase">Signal (RSSI)</span>
+                      <span className="text-slate-200">{d.signal_rssi || -65} dBm</span>
+                    </div>
+                    <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
+                      <span className="text-vault-500 block text-[9px] uppercase">Battery / Supply</span>
+                      <span className="text-slate-200">{d.battery_voltage || 3.3}V</span>
+                    </div>
+                    <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
+                      <span className="text-vault-500 block text-[9px] uppercase">Firmware</span>
+                      <span className="text-slate-200 truncate block">{d.firmware_version || 'v2.4.1-espnow'}</span>
+                    </div>
                   </div>
-                  {isAvailable && canEdit && (
-                    <button
-                      onClick={() => {
-                        setEditingDevice(d);
-                        setEditName(d.user_name);
-                        setEditAreaId('');
-                      }}
-                      className="px-2 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-semibold shadow transition"
-                    >
-                      + Assign
-                    </button>
+
+                  {/* Sensors Attached */}
+                  {d.sensors && d.sensors.length > 0 && (
+                    <div className="text-xs">
+                      <span className="text-[10px] text-vault-400 font-semibold block mb-1">Attached Sensors:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {d.sensors.map((s) => (
+                          <span
+                            key={s.id}
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-vault-800 text-vault-300 font-mono"
+                          >
+                            {s.sensor_type} ({s.calibrated_reading}{s.unit})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Hardware Specs & Health */}
-                <div className="grid grid-cols-2 gap-2 text-xs mb-3 font-mono text-[11px]">
-                  <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
-                    <span className="text-vault-500 block text-[9px] uppercase">IP / WAN Address</span>
-                    <span className="text-slate-200">{d.ip_address || 'Direct Cloud IP'}</span>
-                  </div>
-                  <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
-                    <span className="text-vault-500 block text-[9px] uppercase">Signal (RSSI)</span>
-                    <span className="text-slate-200">{d.signal_rssi} dBm</span>
-                  </div>
-                  <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
-                    <span className="text-vault-500 block text-[9px] uppercase">Battery / Supply</span>
-                    <span className="text-slate-200">{d.battery_voltage}V (Nominal)</span>
-                  </div>
-                  <div className="bg-vault-950/50 p-2 rounded border border-vault-800/40">
-                    <span className="text-vault-500 block text-[9px] uppercase">Firmware & Board</span>
-                    <span className="text-slate-200 truncate block">{d.hardware_type || (dev8266 ? 'ESP8266' : 'ESP32')}</span>
-                  </div>
-                </div>
+                {/* Footer Buttons */}
+                <div className="pt-3 mt-3 border-t border-vault-800/80 flex items-center justify-between text-xs">
+                  <span className="text-[10px] text-vault-500 font-mono">
+                    Beat: {new Date(d.last_heartbeat).toLocaleTimeString()}
+                  </span>
 
-                {/* Sensors Attached */}
-                {d.sensors && d.sensors.length > 0 && (
-                  <div className="text-xs">
-                    <span className="text-[10px] text-vault-400 font-semibold block mb-1">Attached Sensors:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {d.sensors.map((s) => (
-                        <span
-                          key={s.id}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-vault-800 text-vault-300 font-mono"
-                        >
-                          {s.sensor_type} ({s.calibrated_reading}{s.unit})
-                        </span>
-                      ))}
+                  {canEdit && (
+                    <div className="flex items-center gap-1.5">
+                      {isPending ? (
+                        <>
+                          <button
+                            onClick={() => setConfiguringDevice(d)}
+                            className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-bold shadow flex items-center gap-1 transition"
+                            title="Approve and configure device"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>Authorize</span>
+                          </button>
+                          <button
+                            onClick={() => handleRejectDevice(d.id, d.user_name)}
+                            className="p-1.5 rounded bg-vault-800 hover:bg-rose-900/60 text-vault-400 hover:text-rose-300 transition"
+                            title="Reject discovery"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {d.area_id && (
+                            <button
+                              onClick={() => handleUnassignDevice(d.id, d.user_name)}
+                              className="p-1.5 rounded bg-vault-800 hover:bg-amber-900/40 text-vault-400 hover:text-amber-300 transition"
+                              title={`Unassign from room`}
+                            >
+                              <Unlink className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setConfiguringDevice(d)}
+                            className="p-1.5 rounded bg-vault-800 hover:bg-vault-700 text-slate-200 transition"
+                            title="Configure, Position & Assign"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          {isRevoked ? (
+                            <button
+                              onClick={() => setConfiguringDevice(d)}
+                              className="p-1.5 rounded bg-vault-800 hover:bg-emerald-900/60 text-vault-400 hover:text-emerald-300 transition"
+                              title="Re-authorize device"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleRevokeDevice(d.id, d.user_name)}
+                              className="p-1.5 rounded bg-vault-800 hover:bg-rose-900/60 text-vault-400 hover:text-rose-300 transition"
+                              title="Revoke Authorization"
+                            >
+                              <ShieldAlert className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleDeleteDevice(d.id, d.user_name)}
+                            className="p-1.5 rounded bg-vault-800 hover:bg-rose-900/60 text-vault-400 hover:text-rose-300 transition"
+                            title="Delete Node"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-
-              {/* Footer Buttons */}
-              <div className="pt-3 mt-3 border-t border-vault-800/80 flex items-center justify-between text-xs">
-                <span className="text-[10px] text-vault-500 font-mono">
-                  Beat: {new Date(d.last_heartbeat).toLocaleTimeString()}
-                </span>
-
-                {canEdit && (
-                  <div className="flex items-center gap-1.5">
-                    {d.area_id && (
-                      <button
-                        onClick={() => handleUnassignDevice(d.id, d.user_name)}
-                        className="p-1.5 rounded bg-vault-800 hover:bg-amber-900/40 text-vault-400 hover:text-amber-300 transition"
-                        title={`Unassign from ${d.area_name || 'Room'}`}
-                      >
-                        <Unlink className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => {
-                        setEditingDevice(d);
-                        setEditName(d.user_name);
-                        setEditAreaId(d.area_id || '');
-                      }}
-                      className="p-1.5 rounded bg-vault-800 hover:bg-vault-700 text-slate-200 transition"
-                      title="Configure & Assign"
-                    >
-                      <Edit2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteDevice(d.id, d.user_name)}
-                      className="p-1.5 rounded bg-vault-800 hover:bg-rose-900/60 text-vault-400 hover:text-rose-300 transition"
-                      title="Unregister Node"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
         </div>
       )}
 
-      {/* Edit / Assign Modal */}
-      {editingDevice && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-vault-900 border border-vault-700 rounded-xl max-w-md w-full p-5 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-white">Configure Node: {editingDevice.id}</h3>
-                <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded ${
-                  is8266(editingDevice) ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'
-                }`}>
-                  {editingDevice.hardware_type || (is8266(editingDevice) ? 'ESP8266' : 'ESP32')} • Internet Direct
-                </span>
-              </div>
-              <button
-                onClick={() => setEditingDevice(null)}
-                className="text-vault-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-vault-300 mb-1 font-semibold">User-Defined Friendly Name</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-vault-950 border border-vault-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-agri-500 font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-vault-300 mb-1 font-semibold">Assign to Storage Room / Vault</label>
-                <select
-                  value={editAreaId}
-                  onChange={(e) => setEditAreaId(e.target.value)}
-                  className="w-full bg-vault-950 border border-vault-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-agri-500 font-medium"
-                >
-                  <option value="">-- Available / Standby (Unassigned) --</option>
-                  {areas.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.name} ({a.commodity})
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-vault-500 mt-1">
-                  Assigning this ESP connects its sensors to the room's health score and alert engine.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-vault-800">
-              <button
-                onClick={() => setEditingDevice(null)}
-                className="px-3.5 py-1.5 rounded-lg bg-vault-800 text-slate-300 text-xs hover:bg-vault-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveDevice}
-                className="px-4 py-1.5 rounded-lg bg-agri-600 text-white text-xs font-semibold hover:bg-agri-500 shadow-md"
-              >
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Device Configuration & Provisioning Modal */}
+      {configuringDevice && (
+        <DeviceConfigureModal
+          device={configuringDevice}
+          areas={areas}
+          isOpen={Boolean(configuringDevice)}
+          onClose={() => setConfiguringDevice(null)}
+          onSaved={async () => {
+            setConfiguringDevice(null);
+            await loadDevices();
+            await refreshOverview();
+          }}
+        />
       )}
 
       {/* Internet Connection Setup Guide Modal */}

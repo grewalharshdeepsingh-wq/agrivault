@@ -1,129 +1,184 @@
-# 📡 AgriVault Universal ESP Node Firmware (ESP8266 & ESP32)
+# 📡 AgriVault Industrial Cold Storage IoT Firmware Architecture
 
-> Production-grade firmware for **ESP8266** (NodeMCU, Wemos D1 Mini) and **ESP32** (DevKit-V1, NodeMCU-32S, ESP-WROOM).  
-> Features an unstyled **SoftAP Captive Portal Wi-Fi Setup Wizard**, **Over-The-Air (OTA) updates**, and **direct HTTP/MQTT telemetry streaming** to the AgriVault platform.
-
----
-
-## 🌟 Key Features
-
-1. **Dual Microcontroller Compatibility**: A single Arduino sketch automatically adapts pins and libraries for both ESP8266 and ESP32.
-2. **SoftAP Setup Wizard (Zero Styling / Fast Captive Portal)**:
-   - When unconfigured or unable to connect, the ESP broadcasts a Wi-Fi Access Point: `AgriVault-Node-[MAC]`.
-   - Captive portal automatically opens `http://192.168.4.1` on your phone or laptop.
-   - Clean, lightweight steps to enter your Wi-Fi SSID, Password, and AgriVault Server URL.
-   - Saves credentials to persistent flash memory (EEPROM) and reboots into normal monitoring mode.
-3. **Dual Over-The-Air (OTA) Updating**:
-   - **Local Network OTA (`ArduinoOTA`)**: Wirelessly flash new code directly from Arduino IDE or PlatformIO without USB cables.
-   - **Web Browser OTA (`http://<DEVICE_IP>/update`)**: Upload pre-compiled `.bin` firmware files directly via any web browser.
-4. **Auto-Discovery by AgriVault**:
-   - As soon as the ESP connects to the internet/Wi-Fi and transmits its first packet, AgriVault immediately discovers the device and displays it on the Dashboard.
-5. **Dynamic Room & Section Assignment**:
-   - Assign discovered ESPs to storage rooms (e.g. Potato Store 1, Fruit Vault B, Cold Room 3) with 1 click.
-6. **Physical Button Reset**:
-   - Hold the onboard **BOOT / FLASH button (GPIO 0)** for **3 seconds** to clear saved credentials and return to SoftAP setup mode anytime.
+> **Production Hardware Reference & Firmware Suite**  
+> Tailored for large, sealed cold storage environments (e.g. 162 ft × 94 ft × 48 ft) where radio signals cannot reliably penetrate insulated metallic/composite walls.
 
 ---
 
-## 🔌 Hardware Wiring Diagram
+## 🏛️ 1. Multi-Tier Hardware Architecture
 
-### 1. ESP8266 (NodeMCU / Wemos D1 Mini)
+```
+[ INSIDE COLD STORE / WAREHOUSE ]                                  [ OUTSIDE FACILITY ]
+┌──────────────────────────────┐
+│  ESP32 SENSOR NODES          │
+│  ├── DS18B20 Temp (Digital)  │
+│  ├── DHT11 Humidity (Digital)│
+│  ├── MQ-3 Ethanol/VOC        │
+│  └── MQ-135 Ammonia/Air      │
+└──────────────┬───────────────┘
+               │ Local 2.4GHz Wireless
+               │ (ESP-NOW Protocol)
+               ▼
+┌──────────────────────────────┐
+│  INNER CENTRAL GATEWAY       │
+│  (ESP32: GW-INNER-01)        │
+│  - Auto-discovery via MAC    │
+│  - Node Heartbeat Watchdog   │
+│  - 500-Packet FIFO Buffer    │
+└──────────────┬───────────────┘
+               │ 
+═══════════════╪════════════════════════════════════════════════════════════════════════
+               │ WIRED WALL PENETRATION LINK (RS-485 / MAX485 Half-Duplex)
+               │ Twisted Pair (A & B) with 120Ω Termination Resistors
+═══════════════╪════════════════════════════════════════════════════════════════════════
+               │
+               ▼
+┌──────────────────────────────┐
+│  OUTER GATEWAY               │
+│  (ESP32: GW-OUTER-01)        │
+│  - Receives RS-485 frames    │
+│  - 1,000-Packet FIFO Buffer  │
+│  - Auto-Flushing on Recovery │
+└──────────────┬───────────────┘
+               │ Wi-Fi WAN / Ethernet Uplink
+               ▼
+        [ INTERNET WAN ]
+               │
+               ▼
+┌──────────────────────────────┐
+│  AgriVault Cloud / Server    │
+│  - Node:3000 / Port 4000     │
+│  - REST & MQTT Ingestion     │
+│  - Storage Health Engine     │
+└──────────────────────────────┘
+```
 
-| Sensor / Module | Sensor Pin | ESP8266 Pin | Notes |
+---
+
+## 🚦 2. Architectural Status Delineation
+
+To maintain absolute engineering integrity, the system clearly separates capabilities:
+
+### ✅ Currently Implemented Functionality (Software & Simulator)
+1. **Permanent Hardware MAC Identity**: Nodes are keyed permanently by factory ESP32 MAC address (`hardware_id`), decoupled from renamable display names (`user_name`) and physical assignments (`device_code`).
+2. **Security Provisioning Workflow**: New nodes enter `PENDING REGISTRATION` upon detection; administrators must authorize and configure physical location before telemetry activates facility health scoring.
+3. **6-Tier Facility Hierarchy**: Configurable Cold Store (Length × Width × Height ft) ➔ Zone ➔ Area ➔ Rack ➔ Level ➔ ESP Node ➔ Sensors.
+4. **Offline FIFO Buffering**: Inner and Outer gateways maintain queued readings during wired link or WAN outages; upon restoration, readings flush sequentially with original hardware timestamps marked `is_buffered = 1`.
+5. **Multi-Sensor Metrics**: DS18B20, DHT11, MQ-3 (ethanol/fermentation VOCs), and MQ-135 (ammonia/hazardous air) are first-class metrics in backend schemas, MQTT handlers, and UI telemetry charts.
+6. **2D Cold Store Layout Map**: Visualizes wall insulation boundaries, RS-485 wall link, Inner/Outer Gateways, and live node temperature/gas heatpins.
+7. **Simulation Laboratory**: Interactive testbed for WAN outage, RS-485 cable severance, node watchdog timeouts, and gas anomalies clearly tagged `[SIMULATED]`.
+
+### ⚠️ Hardware-Dependent Functionality (Requires Physical Hardware)
+1. **ESP-NOW RF Propagation**: Subject to metal racking absorption, pallet density, and ice build-up in physical 162 ft × 94 ft warehouses.
+2. **MAX485 Physical Wiring**: Requires correct differential wiring (`A` to `A`, `B` to `B`), DE/RE direction pin toggling, and 120Ω bus terminators at both ends.
+3. **Gas Sensor Pre-heating**: MQ-3 and MQ-135 require 5V heater supplies and a 24-48h burn-in time for accurate baseline resistance ($R_0$) calibration.
+4. **DS18B20 Pull-up Resistor**: Physical 4.7kΩ resistor between Data line and 3.3V is strictly required for OneWire communication.
+
+### 🔮 Future / Placeholder Functionality
+1. **Multi-Hop ESP-NOW Mesh Relay**: `parent_node_id` column and packet field are reserved for future intermediate repeater nodes in ultra-deep cold racks.
+2. **Dual-SIM Cellular Fallback**: Secondary LTE-M / NB-IoT modem attached to Outer Gateway UART for remote facilities without reliable Wi-Fi WAN.
+
+---
+
+## 🔌 3. Complete Pinout & Wiring Specifications
+
+### A. ESP32 Sensor Node Inside Cold Store
+Located at: `firmware/esp32_sensor_node_espnow/esp32_sensor_node_espnow.ino`
+
+| Sensor / Module | Sensor Pin | ESP32 GPIO | Description / Wiring Requirements |
 | :--- | :--- | :--- | :--- |
-| **DS18B20 Temp Probe** | VCC (Red) | 3.3V | Digital waterproof probe |
+| **DS18B20 Temperature** | VCC (Red) | 3.3V | Digital waterproof stainless probe |
 | | GND (Black) | GND | Common Ground |
-| | DATA (Yellow) | **D2 (GPIO 4)** | **Requires 4.7kΩ pull-up resistor to 3.3V** |
-| **Analog Gas Sensor** (MQ-135 / MQ-3) | AOUT | **A0 (ADC0)** | Analog 0-1V / 0-3.3V |
-| | VCC | 5V (Vin) | Heater requires 5V |
+| | DATA (Yellow) | **GPIO 4** | **CRITICAL: Connect 4.7kΩ pull-up resistor between GPIO 4 and 3.3V** |
+| **DHT11 / DHT22 Humidity**| VCC | 3.3V | Digital relative humidity sensor |
 | | GND | GND | Common Ground |
-| **Relay Module** (Optional) | IN | **D5 (GPIO 14)** | Active HIGH |
-| **Status LED** | Onboard | **D4 (GPIO 2)** | Built-in Blue LED |
-| **Reset SoftAP** | Pushbutton | **D3 (GPIO 0)** | Onboard FLASH button (Hold 3s) |
+| | DATA | **GPIO 5** | Built-in pull-up or external 10kΩ resistor |
+| **MQ-3 Gas (Fermentation)**| VCC | 5V (VIN) | Heater requires 5V supply |
+| | GND | GND | Common Ground |
+| | AOUT (Analog) | **GPIO 34** | ADC1_CH6 (Safe to read concurrently with Wi-Fi) |
+| **MQ-135 Gas (Ammonia)** | VCC | 5V (VIN) | Heater requires 5V supply |
+| | GND | GND | Common Ground |
+| | AOUT (Analog) | **GPIO 35** | ADC1_CH7 (Safe to read concurrently with Wi-Fi) |
+| **Status Indicator** | Built-in LED | **GPIO 2** | Flashes on each successful ESP-NOW transmission |
 
 ---
 
-### 2. ESP32 (DevKit-V1 / 30-Pin / 38-Pin)
+### B. Inner Central Gateway (Inside Vault)
+Located at: `firmware/esp32_inner_gateway/esp32_inner_gateway.ino`
 
-| Sensor / Module | Sensor Pin | ESP32 Pin | Notes |
+| Component | Pin | ESP32 GPIO | Notes |
 | :--- | :--- | :--- | :--- |
-| **DS18B20 Temp Probe** | VCC (Red) | 3.3V | Digital waterproof probe |
-| | GND (Black) | GND | Common Ground |
-| | DATA (Yellow) | **GPIO 4** | **Requires 4.7kΩ pull-up resistor to 3.3V** |
-| **Analog Gas Sensor** (MQ-135) | AOUT | **GPIO 34 (ADC1_CH6)** | ADC1 safe to read while Wi-Fi is active |
-| | VCC | 5V (VIN) | Heater requires 5V |
+| **MAX485 Module** | VCC | 5V (VIN) | RS-485 transceiver supply |
 | | GND | GND | Common Ground |
-| **Optional 2nd Gas** (MQ-3) | AOUT | **GPIO 35 (ADC1_CH7)** | Ethanol / VOCs |
-| **Relay Module** (Optional) | IN | **GPIO 26** | 5V 1-Channel Relay |
-| **Status LED** | Onboard | **GPIO 2** | Built-in Blue LED |
-| **Reset SoftAP** | Pushbutton | **GPIO 0** | Onboard BOOT button (Hold 3s) |
+| | RO (Receiver Output) | **GPIO 16 (RX2)** | UART2 Serial RX |
+| | DI (Driver Input) | **GPIO 17 (TX2)** | UART2 Serial TX |
+| | DE (Driver Enable) | **GPIO 4** | Tied together with RE |
+| | RE (Receiver Enable) | **GPIO 4** | HIGH = Transmit to Outer GW, LOW = Listen |
+| | **A (Non-inverting)** | Twisted Pair Line A | Connect to Outer GW Line A (120Ω resistor across A & B) |
+| | **B (Inverting)** | Twisted Pair Line B | Connect to Outer GW Line B |
 
 ---
 
-## 🛠️ Arduino IDE Setup & Flashing
+### C. Outer Gateway (Outside Vault)
+Located at: `firmware/esp32_outer_gateway/esp32_outer_gateway.ino`
 
-### Step 1: Install Required Libraries in Arduino IDE
-Open **Arduino IDE** -> **Sketch** -> **Include Library** -> **Manage Libraries...** and install:
-1. `OneWire` by Paul Stoffregen
-2. `DallasTemperature` by Miles Burton
-3. `ArduinoOTA` (built-in)
-
-### Step 2: Select Board
-- For ESP8266: **Tools** -> **Board** -> **ESP8266 Boards** -> **NodeMCU 1.0 (ESP-12E Module)**.
-- For ESP32: **Tools** -> **Board** -> **esp32** -> **ESP32 Dev Module**.
-
-### Step 3: Compile and Upload
-1. Open [`agrivault_universal_node/agrivault_universal_node.ino`](file:///C:/Users/Harshdeep%20singh/agrivault/firmware/agrivault_universal_node/agrivault_universal_node.ino).
-2. Connect your ESP via USB cable and click **Upload**.
+| Component | Pin | ESP32 GPIO | Notes |
+| :--- | :--- | :--- | :--- |
+| **MAX485 Module** | VCC | 5V (VIN) | RS-485 transceiver supply |
+| | GND | GND | Common Ground |
+| | RO (Receiver Output) | **GPIO 16 (RX2)** | UART2 Serial RX from Inner GW |
+| | DI (Driver Input) | **GPIO 17 (TX2)** | UART2 Serial TX |
+| | DE / RE | **GPIO 4** | Held LOW to continuously receive from Inner GW |
+| | **A** | Twisted Pair Line A | Connect to Inner GW Line A |
+| | **B** | Twisted Pair Line B | Connect to Inner GW Line B |
+| **WAN Status LED** | Anode | **GPIO 2** | Solid ON = Internet WAN Connected |
 
 ---
 
-## 📲 How to Connect to Wi-Fi (Setup Wizard)
+## 📦 4. Binary & JSON Frame Protocol
 
-1. On first power-up (or if Wi-Fi cannot be reached), the ESP will start an access point:  
-   **Wi-Fi SSID**: `AgriVault-Node-XXXX` (e.g. `AgriVault-Node-4A1B`)  
-   **Password**: *(Open network, no password required)*
-2. Connect to this network on your smartphone, tablet, or laptop.
-3. A captive portal screen will appear automatically, or you can open your browser and navigate to:  
-   `http://192.168.4.1`
-4. Fill in the simple form:
-   - **Wi-Fi Network Name (SSID)**: Your home or warehouse Wi-Fi name.
-   - **Wi-Fi Password**: Your network password.
-   - **AgriVault Server Base URL**: e.g., `http://192.168.1.100:4000` (or your cloud URL).
-   - **Friendly Name**: e.g., `Cold Room 01 Probe`.
-5. Click **Save and Connect to Network**.
-6. The module will store the configuration in flash memory and reboot into your Wi-Fi network.
+### ESP-NOW Raw Packet Structure (Sensor Node ➔ Inner Gateway)
+```cpp
+typedef struct __attribute__((packed)) {
+  char hardware_id[18];       // Factory MAC address: "24:0A:C4:01:02:03"
+  char device_id[16];         // Logical ID: "AGR-ESP-001"
+  char firmware_version[16];  // e.g. "v2.5.0-espnow"
+  uint32_t seq_number;        // Incremental transmission counter
+  float temperature_c;        // DS18B20 reading (°C)
+  float humidity_rh;          // DHT11 reading (% RH)
+  float mq3_ppm;              // MQ-3 alcohol/fermentation VOC reading
+  float mq135_ppm;            // MQ-135 ammonia/air quality reading
+  float battery_volts;        // Supply voltage
+  int8_t rssi;                // Signal strength indicator
+  char parent_gateway_id[16]; // "GW-INNER-01"
+  char parent_node_id[16];    // Reserved for repeater mesh
+  uint8_t flags;              // Bit 0: battery low, Bit 1: sensor fault
+} SensorPacket;
+```
+
+### Framed RS-485 Serial Protocol (Inner Gateway ➔ Outer Gateway)
+```json
+AGRI_FRAME:{
+  "gateway_id": "GW-INNER-01",
+  "hardware_id": "24:0A:C4:01:02:03",
+  "device_id": "AGR-ESP-001",
+  "seq": 1042,
+  "temp": 3.45,
+  "hum": 88.20,
+  "mq3": 0.42,
+  "mq135": 1.15,
+  "battery": 3.30,
+  "fw": "v2.5.0-espnow",
+  "buffered": false
+}:END
+```
 
 ---
 
-## 🔄 Over-The-Air (OTA) Firmware Updates
+## 🛡️ 5. Provisioning Security Flow
 
-Once connected to your Wi-Fi network, you can update the ESP without touching the USB cable:
-
-### Option A: Web Browser OTA (`/update`)
-1. In your AgriVault Dashboard or router, find the ESP's IP address (e.g. `192.168.1.145`).
-2. Open a web browser and go to:  
-   `http://192.168.1.145/update`
-3. Click **Choose File** and select your compiled `.bin` file (in Arduino IDE: *Sketch -> Export Compiled Binary*).
-4. Click **Flash Firmware Over-The-Air**. The ESP updates and reboots automatically!
-
-### Option B: Arduino IDE Network Port
-In Arduino IDE under **Tools** -> **Port**, your module will appear under **Network Ports**:  
-`ESP32-XXXXXX at 192.168.1.145`. Select it and click Upload!
-
----
-
-## 🖥️ Using the Dashboard & Analytics
-
-1. **Auto-Discovery**:
-   - As soon as the ESP boots and transmits telemetry, a notification banner appears in the Dashboard:  
-     `"1 ESP Module Ready for Setup — Connected to network and transmitting telemetry."`
-2. **Card Views (Rooms & Sections)**:
-   - Click **+ Add Room / Section** on the Dashboard.
-   - Enter room name (e.g. `Potato Store North`) and commodity.
-   - Select your discovered ESP module using the checkbox.
-   - The room card will immediately show the live temperature, humidity, CO2, and gas readings streaming from your ESP!
-3. **Analytics & Statistics Page**:
-   - Click **Analytics & Stats** on the sidebar.
-   - View comparative multi-room line charts across all your rooms.
-   - Inspect statistical distributions: **Minimum, Maximum, Mean Average, Standard Deviation (Drift), and Environmental Stability Score (%)**.
+1. **Detection**: Inner Gateway receives an ESP-NOW frame from an unrecognized MAC address.
+2. **Registration Quarantine**: The node is recorded with `registration_status = 'pending'` and `is_discovered = 1`.
+3. **Admin Review**: In AgriVault Dashboard or Fleet page, an amber banner prompts: **"New Hardware Nodes Pending Admin Provisioning"**.
+4. **Configuration & Authorization**: The facility manager assigns the physical location (Cold Store, Zone, Rack, Level) and approves the node.
+5. **Active Ingestion**: Once authorized (`registration_status = 'active'`), sensor readings stream into room health analytics and trigger automated ventilation relays.
