@@ -3,7 +3,7 @@
     "frontend": {
       "root": "frontend",
       "framework": "vite",
-      "installCommand": "npm install",
+      "installCommand": "npm install --include=dev",
       "outputDirectory": "dist"
     },
     "backend": {

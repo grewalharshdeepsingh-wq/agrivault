@@ -3,12 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "description": "AgriVault Industrial IoT Platform",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "build": "npm --prefix backend run build && npm --prefix frontend run build",
+    "start": "node backend/index.js",
+    "test": "node test_e2e.cjs"
+  },
   "dependencies": {
     "express": "^4.21.2"
-  },
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
     "type": "git",
@@ -16,10 +21,5 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "bugs": {
-    "url": "https://github.com/grewalharshdeepsingh-wq/agrivault/issues"
-  },
-  "homepage": "https://github.com/grewalharshdeepsingh-wq/agrivault#readme"
+  "license": "ISC"
 }
