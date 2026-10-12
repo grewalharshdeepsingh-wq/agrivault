@@ -4,9 +4,18 @@
 #include <Arduino.h>
 
 // ==============================================================================
-// ❄️ AGRIVAULT INDUSTRIAL ESP32 FIRMWARE CONFIGURATION
-// Multi-Sensor Environmental Telemetry & Wi-Fi Captive Portal Provisioning
+// ❄️ SENSOR TELEMETRY CONTAINER (Zero-Fabrication Architecture)
 // ==============================================================================
+struct SensorData {
+  bool tempInstalled;
+  float tempC;
+  bool humInstalled;
+  float humidity;
+  int mq3Raw;
+  float mq3Ratio;
+  int mq135Raw;
+  float mq135Ratio;
+};
 
 #define FIRMWARE_VERSION       "v2.4.0-provision"
 #define HARDWARE_TYPE          "ESP32-DevKit-V1"

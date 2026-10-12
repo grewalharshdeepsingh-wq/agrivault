@@ -36,6 +36,17 @@
 #include <DallasTemperature.h>
 #include "config.h"
 
+// Explicit Forward Declarations (Required for Arduino IDE preprocessor)
+SensorData acquireSensors();
+void transmitTelemetry();
+void startProvisioningAP();
+bool connectStationWiFi();
+void setupCaptivePortalRoutes();
+void loadPreferences();
+void savePreferences(String s, String p, String b, String n, String t);
+String generateDeviceId();
+String sanitizeUrl(String url);
+
 // --- Hardware Instances ---
 Preferences prefs;
 WebServer server(80);
@@ -354,17 +365,6 @@ bool connectStationWiFi() {
 // ==============================================================================
 // 4. SENSOR READINGS & HARDWARE ACQUISITION (ZERO FABRICATION)
 // ==============================================================================
-struct SensorData {
-  bool tempInstalled;
-  float tempC;
-  bool humInstalled;
-  float humidity;
-  int mq3Raw;
-  float mq3Ratio;
-  int mq135Raw;
-  float mq135Ratio;
-};
-
 SensorData acquireSensors() {
   SensorData data;
 
