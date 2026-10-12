@@ -26,13 +26,11 @@ import {
   Trash2,
   Settings2,
   Edit2,
-  MapPin,
   Search,
   Filter,
   Cable
 } from 'lucide-react';
 import { NetworkTopologyBar } from '../components/NetworkTopologyBar';
-import { ColdStoreMap } from '../components/ColdStoreMap';
 import { DeviceConfigureModal } from '../components/DeviceConfigureModal';
 
 interface DashboardProps {
@@ -73,7 +71,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Tab & Hardware Management State
-  const [activeTab, setActiveTab] = useState<'rooms' | 'map' | 'nodes'>('rooms');
+  const [activeTab, setActiveTab] = useState<'rooms' | 'nodes'>('rooms');
   const [configuringDevice, setConfiguringDevice] = useState<ESPDevice | null>(null);
   const [nodeSearch, setNodeSearch] = useState('');
   const [nodeZoneFilter, setNodeZoneFilter] = useState('all');
@@ -510,19 +508,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveTab('map')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
-              activeTab === 'map' ? 'bg-agri-600 text-white shadow-md' : 'text-vault-400 hover:text-white hover:bg-vault-800/60'
-            }`}
-          >
-            <MapPin className="w-4 h-4" />
-            <span>Cold Store 2D Layout Map</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-emerald-400 font-mono">
-              Live Map
-            </span>
-          </button>
-
-          <button
             onClick={() => setActiveTab('nodes')}
             className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition ${
               activeTab === 'nodes' ? 'bg-agri-600 text-white shadow-md' : 'text-vault-400 hover:text-white hover:bg-vault-800/60'
@@ -583,22 +568,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
         </div>
-      )}
-
-      {/* TAB 2: Cold Store 2D Spatial Layout Map */}
-      {activeTab === 'map' && (
-        <ColdStoreMap
-          facility={facility}
-          devices={allDevices}
-          onSelectDevice={(id) => {
-            const d = allDevices.find(x => x.id === id);
-            if (d) setConfiguringDevice(d);
-          }}
-          onRefreshFacility={() => {
-            refreshOverview();
-            fetchDevices();
-          }}
-        />
       )}
 
       {/* TAB 3: All ESP Hardware Nodes (Comprehensive Table & Filter) */}
