@@ -208,6 +208,37 @@ export const api = {
   // System & Diagnostics
   getSystemHealth: () => request<any>('/system/health'),
 
+  // Crop Profiles
+  getCropProfiles: () => request<any[]>('/crop-profiles'),
+  getCropProfile: (id: string) => request<any>(`/crop-profiles/${id}`),
+  createCropProfile: (data: any) =>
+    request<any>('/crop-profiles', { method: 'POST', body: JSON.stringify(data) }),
+  updateCropProfile: (id: string, data: any) =>
+    request<any>(`/crop-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  assignCropProfile: (id: string, areaId: string) =>
+    request<any>(`/crop-profiles/${id}/assign`, { method: 'POST', body: JSON.stringify({ areaId }) }),
+  resetCropProfiles: () =>
+    request<any>('/crop-profiles/reset-defaults', { method: 'POST', body: JSON.stringify({ confirmed: true }) }),
+
+  // Risk Advisor
+  getRiskAdvice: (facilityId?: string) =>
+    request<any>(facilityId ? `/risk-advisor?facilityId=${facilityId}` : '/risk-advisor'),
+
+  // Provisioning & Diagnostics
+  provisionDeviceManual: (data: any) =>
+    request<any>('/devices/provision', { method: 'POST', body: JSON.stringify(data) }),
+  reconfigureDeviceWifi: (deviceId: string) =>
+    request<any>(`/devices/${deviceId}/reconfigure-wifi`, { method: 'POST' }),
+  getDeviceDiagnostics: (deviceId: string) =>
+    request<any>(`/devices/${deviceId}/diagnostics`),
+
+  // Manual Relay Control
+  sendRelayCommand: (relayId: string, action: 'ON' | 'OFF', confirmed = true, reason?: string) =>
+    request<any>(`/relays/${relayId}/command`, {
+      method: 'POST',
+      body: JSON.stringify({ action, confirmed, reason })
+    }),
+
   // Simulation Controller
   getSimulationStatus: () => request<any>('/simulation/status'),
   setSimulationScenario: (scenario: string) =>

@@ -10,55 +10,111 @@ import {
   Sliders,
   Settings,
   Building2,
-  Radio
+  Radio,
+  BookOpen,
+  ShieldAlert,
+  Server,
+  QrCode,
+  Users,
+  HelpCircle,
+  ShieldCheck,
+  Home
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export type NavTab =
+  | 'landing'
+  | 'auth'
   | 'dashboard'
+  | 'facilities'
   | 'areas'
   | 'devices'
+  | 'gateways'
+  | 'provisioning'
   | 'live'
+  | 'crop_profiles'
+  | 'thresholds'
+  | 'risk_advisor'
   | 'alerts'
   | 'analytics'
   | 'reports'
-  | 'automation'
-  | 'system'
-  | 'simulation'
-  | 'settings';
+  | 'relays'
+  | 'users'
+  | 'diagnostics'
+  | 'settings'
+  | 'help'
+  | 'simulation';
 
 interface SidebarProps {
   currentTab: NavTab;
   onSelectTab: (tab: NavTab) => void;
 }
 
-interface NavItem {
-  id: NavTab;
-  label: string;
-  icon: any;
-  count?: number;
-  countColor?: string;
-  badge?: string;
-  badgeColor?: string;
+interface NavGroup {
+  title: string;
+  items: {
+    id: NavTab;
+    label: string;
+    icon: any;
+    count?: number;
+    countColor?: string;
+    badge?: string;
+    badgeColor?: string;
+  }[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => {
   const { overview, discoveredDevices } = useApp();
   const activeAlertsCount = overview?.activeAlertsCount || 0;
-  const discoveredCount = discoveredDevices.filter(d => d.is_discovered === 1).length;
+  const discoveredCount = discoveredDevices.filter(d => d.is_discovered === 1 || d.registration_status === 'pending').length;
 
-  const navItems: NavItem[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'areas', label: 'Rooms & Sections', icon: Layers, count: overview?.activeAreasCount },
-    { id: 'analytics', label: 'Analytics & Stats', icon: Activity },
-    { id: 'devices', label: 'Devices & ESPs', icon: Cpu, badge: discoveredCount > 0 ? `${discoveredCount} new` : undefined, badgeColor: 'bg-indigo-500' },
-    { id: 'live', label: 'Live Monitoring', icon: Radio },
-    { id: 'alerts', label: 'Active Alerts', icon: AlertTriangle, count: activeAlertsCount, countColor: activeAlertsCount > 0 ? 'bg-rose-600 text-white' : undefined },
-    { id: 'reports', label: 'Historical Reports', icon: BarChart3 },
-    { id: 'automation', label: 'Relay Automation', icon: ToggleRight },
-    { id: 'system', label: 'System Health', icon: Activity },
-    { id: 'simulation', label: 'Simulation Lab', icon: Sliders },
-    { id: 'settings', label: 'Thresholds & Settings', icon: Settings },
+  const navGroups: NavGroup[] = [
+    {
+      title: 'Facility Operations',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'facilities', label: 'Facilities', icon: Building2 },
+        { id: 'areas', label: 'Storage Zones', icon: Layers, count: overview?.activeAreasCount },
+        { id: 'landing', label: 'Platform Portal', icon: Home },
+        { id: 'auth', label: 'Access & Roles', icon: ShieldCheck }
+      ]
+    },
+    {
+      title: 'Devices & Gateway Mesh',
+      items: [
+        { id: 'devices', label: 'Sensor Nodes', icon: Cpu },
+        { id: 'gateways', label: 'Central Gateways', icon: Server },
+        { id: 'provisioning', label: 'Device Provisioning', icon: QrCode, badge: discoveredCount > 0 ? `${discoveredCount} new` : undefined, badgeColor: 'bg-agri-500' }
+      ]
+    },
+    {
+      title: 'Sensory Intelligence',
+      items: [
+        { id: 'live', label: 'Live Monitoring', icon: Radio },
+        { id: 'crop_profiles', label: 'Crop Profiles', icon: BookOpen },
+        { id: 'thresholds', label: 'Threshold Rules', icon: Sliders },
+        { id: 'risk_advisor', label: 'Risk Advisor', icon: ShieldAlert },
+        { id: 'alerts', label: 'Active Alerts', icon: AlertTriangle, count: activeAlertsCount, countColor: activeAlertsCount > 0 ? 'bg-rose-600 text-white' : undefined }
+      ]
+    },
+    {
+      title: 'Control & Analytics',
+      items: [
+        { id: 'relays', label: 'Relay Control', icon: ToggleRight },
+        { id: 'analytics', label: 'Analytics & Trends', icon: Activity },
+        { id: 'reports', label: 'Compliance Reports', icon: BarChart3 }
+      ]
+    },
+    {
+      title: 'System & Support',
+      items: [
+        { id: 'diagnostics', label: 'Sensor Diagnostics', icon: Activity },
+        { id: 'users', label: 'User Management', icon: Users },
+        { id: 'settings', label: 'System Settings', icon: Settings },
+        { id: 'help', label: 'Help & Troubleshooting', icon: HelpCircle },
+        { id: 'simulation', label: 'Simulation Lab', icon: Sliders }
+      ]
+    }
   ];
 
   return (
@@ -70,62 +126,58 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
           <span>Active Facility</span>
         </div>
         <p className="text-sm font-semibold text-slate-100 truncate">
-          {overview?.facility?.name || 'ABC Cold Storage'}
+          {overview?.facility?.name || 'Cold Store A (Bulk Operations)'}
         </p>
         <p className="text-xs text-vault-400 truncate">
-          {overview?.facility?.location || 'Central Vault Hub'}
+          {overview?.facility?.location || 'Section 4, Industrial Food Park'}
         </p>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = currentTab === item.id;
+      {/* Navigation Groups */}
+      <nav className="flex-1 p-3 space-y-4 overflow-y-auto">
+        {navGroups.map((group, gIdx) => (
+          <div key={gIdx} className="space-y-1">
+            <span className="px-3 text-[10px] font-bold text-vault-500 uppercase tracking-wider block mb-1">
+              {group.title}
+            </span>
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => onSelectTab(item.id as NavTab)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'bg-agri-600/15 text-agri-300 border border-agri-500/30 shadow-sm'
-                  : 'text-vault-300 hover:bg-vault-800 hover:text-slate-100 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-agri-400' : 'text-vault-400'}`} />
-                <span>{item.label}</span>
-              </div>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const isActive = currentTab === item.id;
 
-              {item.badge && (
-                <span className={`text-[10px] font-mono uppercase px-1.5 py-0.5 rounded text-white ${item.badgeColor || 'bg-vault-700'}`}>
-                  {item.badge}
-                </span>
-              )}
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => onSelectTab(item.id)}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    isActive
+                      ? 'bg-agri-600/15 text-agri-300 border border-agri-500/30 shadow-sm font-bold'
+                      : 'text-vault-300 hover:bg-vault-800 hover:text-slate-100 border border-transparent'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-agri-400' : 'text-vault-400'}`} />
+                    <span className="truncate">{item.label}</span>
+                  </div>
 
-              {item.count !== undefined && item.count > 0 && !item.badge && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-mono font-semibold ${item.countColor || 'bg-vault-800 text-vault-300'}`}>
-                  {item.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+                  <div className="flex items-center gap-1.5">
+                    {item.badge && (
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-white ${item.badgeColor || 'bg-agri-500'}`}>
+                        {item.badge}
+                      </span>
+                    )}
+                    {item.count !== undefined && item.count > 0 && (
+                      <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${item.countColor || 'bg-vault-800 text-slate-300'}`}>
+                        {item.count}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
-
-      {/* Cloud IoT Telemetry Footer */}
-      <div className="p-3 m-3 rounded-lg bg-vault-950/80 border border-vault-800 text-xs">
-        <div className="flex items-center justify-between text-vault-400 mb-1">
-          <span className="font-mono text-[11px]">CLOUD IOT BROKER</span>
-          <span className="flex items-center gap-1 text-emerald-400 text-[11px] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-            ACTIVE
-          </span>
-        </div>
-        <p className="text-[11px] text-emerald-300 font-mono truncate">Direct Internet Sync</p>
-        <p className="text-[10px] text-vault-500 mt-0.5">ESP32 & ESP8266 Nodes</p>
-      </div>
     </aside>
   );
 };

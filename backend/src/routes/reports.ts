@@ -123,8 +123,14 @@ router.get('/generate', (req: Request, res: Response): void => {
     };
   });
 
+  const facility = db.get<{ name: string }>('SELECT name FROM facilities WHERE id = ?', facilityId as string);
+  const facilityName = facility ? facility.name : 'AgriVault Facility';
+  const title = `AgriVault Storage Environmental Compliance Report - ${facilityName} (${periodLabel})`;
+
   res.json({
+    title,
     facilityId,
+    facilityName,
     generatedAt: new Date().toISOString(),
     period: periodLabel,
     areasReport: reports

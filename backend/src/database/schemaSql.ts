@@ -192,6 +192,29 @@ CREATE TABLE IF NOT EXISTS alert_events (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS crop_profiles (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    variety TEXT,
+    purpose TEXT NOT NULL,
+    storage_stage TEXT NOT NULL DEFAULT 'Holding',
+    min_temp REAL NOT NULL,
+    target_temp REAL NOT NULL,
+    max_temp REAL NOT NULL,
+    min_humidity REAL NOT NULL,
+    target_humidity REAL NOT NULL,
+    max_humidity REAL NOT NULL,
+    max_co2_ppm REAL,
+    max_ethylene_ppm REAL,
+    guidance TEXT,
+    sources TEXT,
+    notes TEXT,
+    is_default INTEGER NOT NULL DEFAULT 1,
+    is_custom INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS relay_devices (
     id TEXT PRIMARY KEY,
     device_id TEXT NOT NULL REFERENCES esp_devices(id),
@@ -200,7 +223,14 @@ CREATE TABLE IF NOT EXISTS relay_devices (
     gpio_pin TEXT NOT NULL DEFAULT 'GPIO 26',
     target_equipment TEXT NOT NULL DEFAULT 'Ventilation Fan',
     state INTEGER NOT NULL DEFAULT 0,
-    mode TEXT NOT NULL DEFAULT 'automatic',
+    mode TEXT NOT NULL DEFAULT 'manual',
+    pending_command TEXT,
+    command_status TEXT DEFAULT 'IDLE',
+    command_requested_at TEXT,
+    last_acknowledged_at TEXT,
+    last_confirmed_state INTEGER DEFAULT 0,
+    physical_feedback_confirmed INTEGER DEFAULT 0,
+    command_result TEXT,
     last_switched TEXT NOT NULL,
     total_runtime_seconds INTEGER NOT NULL DEFAULT 0,
     max_continuous_runtime_sec INTEGER NOT NULL DEFAULT 3600,

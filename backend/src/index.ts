@@ -28,6 +28,8 @@ import systemRoutes from './routes/system.js';
 import simulationRoutes from './routes/simulation.js';
 import analyticsRoutes from './routes/analytics.js';
 import gatewayRoutes from './routes/gateways.js';
+import cropProfileRoutes from './routes/cropProfiles.js';
+import riskAdvisorRoutes from './routes/riskAdvisor.js';
 
 dotenv.config();
 
@@ -128,7 +130,9 @@ const apiRoutes: [string, any][] = [
   ['/analytics', analyticsRoutes],
   ['/system', systemRoutes],
   ['/simulation', simulationRoutes],
-  ['/gateways', gatewayRoutes]
+  ['/gateways', gatewayRoutes],
+  ['/crop-profiles', cropProfileRoutes],
+  ['/risk-advisor', riskAdvisorRoutes]
 ];
 
 for (const [routePath, handler] of apiRoutes) {

@@ -66,7 +66,7 @@ router.post('/register', (req: Request, res: Response): void => {
 
   const userId = `usr-${uuidv4().slice(0, 8)}`;
   const passwordHash = bcrypt.hashSync(password, 10);
-  const role = 'Owner'; // First registered user is facility Owner
+  const role = req.body.role || 'Operator';
 
   db.run(
     'INSERT INTO users (id, organization_id, name, email, password_hash, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',

@@ -5,5 +5,21 @@
   "description": "AgriVault Industrial IoT Platform",
   "dependencies": {
     "express": "^4.21.2"
-  }
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/grewalharshdeepsingh-wq/agrivault.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/grewalharshdeepsingh-wq/agrivault/issues"
+  },
+  "homepage": "https://github.com/grewalharshdeepsingh-wq/agrivault#readme"
 }

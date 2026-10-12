@@ -194,6 +194,29 @@ export interface Alert {
   device_name?: string;
 }
 
+export interface CropProfile {
+  id: string;
+  name: string;
+  variety?: string;
+  purpose: string;
+  storage_stage: string;
+  min_temp: number;
+  target_temp: number;
+  max_temp: number;
+  min_humidity: number;
+  target_humidity: number;
+  max_humidity: number;
+  max_co2_ppm?: number;
+  max_ethylene_ppm?: number;
+  guidance: string;
+  sources: string;
+  notes: string;
+  is_default: number;
+  is_custom: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface RelayDevice {
   id: string;
   device_id: string;
@@ -203,6 +226,13 @@ export interface RelayDevice {
   target_equipment: string;
   state: number; // 0: OFF, 1: ON
   mode: 'manual' | 'automatic';
+  pending_command?: string | null;
+  command_status?: 'IDLE' | 'COMMAND_REQUESTED' | 'COMMAND_ACKNOWLEDGED' | 'STATE_REPORTED' | 'COMMAND_TIMED_OUT' | 'COMMAND_FAILED';
+  command_requested_at?: string | null;
+  last_acknowledged_at?: string | null;
+  last_confirmed_state?: number;
+  physical_feedback_confirmed?: number;
+  command_result?: string | null;
   last_switched: string;
   total_runtime_seconds: number;
   max_continuous_runtime_sec: number;

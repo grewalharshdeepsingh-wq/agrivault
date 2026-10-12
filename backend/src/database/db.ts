@@ -127,15 +127,55 @@ function runMigrations(database: UniversalDatabase): void {
     "ALTER TABLE esp_devices ADD COLUMN parent_node_id TEXT;",
     "ALTER TABLE esp_devices ADD COLUMN connection_protocol TEXT DEFAULT 'ESP-NOW';",
     "ALTER TABLE esp_devices ADD COLUMN is_simulated INTEGER DEFAULT 0;",
+    "ALTER TABLE esp_devices ADD COLUMN wifi_ssid TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN registration_code TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN reconfigure_wifi_pending INTEGER DEFAULT 0;",
+    "ALTER TABLE esp_devices ADD COLUMN last_valid_reading_time TEXT;",
+    "ALTER TABLE esp_devices ADD COLUMN staleness_status TEXT DEFAULT 'fresh';",
+    "ALTER TABLE areas ADD COLUMN crop_profile_id TEXT;",
+    "ALTER TABLE relay_devices ADD COLUMN pending_command TEXT;",
+    "ALTER TABLE relay_devices ADD COLUMN command_status TEXT DEFAULT 'IDLE';",
+    "ALTER TABLE relay_devices ADD COLUMN command_requested_at TEXT;",
+    "ALTER TABLE relay_devices ADD COLUMN last_acknowledged_at TEXT;",
+    "ALTER TABLE relay_devices ADD COLUMN last_confirmed_state INTEGER DEFAULT 0;",
+    "ALTER TABLE relay_devices ADD COLUMN physical_feedback_confirmed INTEGER DEFAULT 0;",
+    "ALTER TABLE relay_devices ADD COLUMN command_result TEXT;",
+    "ALTER TABLE sensors ADD COLUMN is_installed INTEGER DEFAULT 1;",
+    "ALTER TABLE sensors ADD COLUMN data_quality TEXT DEFAULT 'good';",
+    "ALTER TABLE sensors ADD COLUMN last_valid_reading REAL;",
+    "ALTER TABLE sensors ADD COLUMN raw_adc REAL;",
+    "ALTER TABLE sensors ADD COLUMN sensor_response_ratio REAL;",
     "ALTER TABLE sensor_readings ADD COLUMN is_buffered INTEGER DEFAULT 0;",
-    "ALTER TABLE sensor_readings ADD COLUMN buffered_at TEXT;"
+    "ALTER TABLE sensor_readings ADD COLUMN buffered_at TEXT;",
+    `CREATE TABLE IF NOT EXISTS crop_profiles (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      variety TEXT,
+      purpose TEXT NOT NULL,
+      storage_stage TEXT NOT NULL DEFAULT 'Holding',
+      min_temp REAL NOT NULL,
+      target_temp REAL NOT NULL,
+      max_temp REAL NOT NULL,
+      min_humidity REAL NOT NULL,
+      target_humidity REAL NOT NULL,
+      max_humidity REAL NOT NULL,
+      max_co2_ppm REAL,
+      max_ethylene_ppm REAL,
+      guidance TEXT,
+      sources TEXT,
+      notes TEXT,
+      is_default INTEGER NOT NULL DEFAULT 1,
+      is_custom INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );`
   ];
 
   for (const sql of alterStatements) {
     try {
       database.exec(sql);
     } catch {
-      // Column already exists - safe to ignore
+      // Column or table already exists - safe to ignore
     }
   }
 

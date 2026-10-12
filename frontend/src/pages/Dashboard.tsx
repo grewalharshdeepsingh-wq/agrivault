@@ -517,8 +517,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           >
             <MapPin className="w-4 h-4" />
             <span>Cold Store 2D Layout Map</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-white font-mono">
-              {facility?.length_ft || 162}×{facility?.width_ft || 94} ft
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-black/30 text-emerald-400 font-mono">
+              Live Map
             </span>
           </button>
 

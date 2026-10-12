@@ -1,21 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ESPDevice, Facility } from '../types';
 import { api } from '../api/client';
 import {
-  Maximize2,
-  Minimize2,
-  Sliders,
   Settings2,
   Cpu,
-  Cable,
-  Globe,
-  Radio,
   Thermometer,
   Droplets,
   Wind,
-  Info,
   Check,
-  X
+  X,
+  Activity,
+  ExternalLink
 } from 'lucide-react';
 
 interface ColdStoreMapProps {
@@ -31,89 +26,163 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
   onSelectDevice,
   onRefreshFacility
 }) => {
-  const [activeMetric, setActiveMetric] = useState<'temperature' | 'humidity' | 'mq3' | 'mq135' | 'status'>('temperature');
+  const [activeMetric, setActiveMetric] = useState<'temperature' | 'humidity' | 'co2' | 'mq3' | 'mq135'>('temperature');
   const [selectedNode, setSelectedNode] = useState<ESPDevice | null>(null);
   const [showDimensionModal, setShowDimensionModal] = useState(false);
 
-  // Facility dimensions (default: 162 ft x 94 ft x 48 ft)
-  const lengthFt = facility?.length_ft || 162;
-  const widthFt = facility?.width_ft || 94;
-  const heightFt = facility?.height_ft || 48;
-  const unit = facility?.dimensions_unit || 'ft';
+  // Sanitized facility dimensions (internal scaling only — NOT displayed as dimensions in 2D map view)
+  const safeLength = Math.max(10, Math.min(2000, Number(facility?.length_ft) || 162));
+  const safeWidth = Math.max(10, Math.min(2000, Number(facility?.width_ft) || 94));
+  const safeHeight = Math.max(5, Math.min(500, Number(facility?.height_ft) || 48));
+  const currentUnit = facility?.dimensions_unit || 'ft';
 
-  // Dimension edit state
-  const [editLength, setEditLength] = useState(lengthFt);
-  const [editWidth, setEditWidth] = useState(widthFt);
-  const [editHeight, setEditHeight] = useState(heightFt);
+  // Dimension edit state for user configuration
+  const [editLength, setEditLength] = useState<number>(safeLength);
+  const [editWidth, setEditWidth] = useState<number>(safeWidth);
+  const [editHeight, setEditHeight] = useState<number>(safeHeight);
+  const [editUnit, setEditUnit] = useState<string>(currentUnit);
   const [isSavingDim, setIsSavingDim] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Synchronize edit inputs when facility props update
+  useEffect(() => {
+    if (facility) {
+      setEditLength(Math.max(10, Number(facility.length_ft) || 162));
+      setEditWidth(Math.max(10, Number(facility.width_ft) || 94));
+      setEditHeight(Math.max(5, Number(facility.height_ft) || 48));
+      setEditUnit(facility.dimensions_unit || 'ft');
+    }
+  }, [facility]);
+
+  const handleOpenDimensionModal = () => {
+    setSaveStatus(null);
+    setEditLength(safeLength);
+    setEditWidth(safeWidth);
+    setEditHeight(safeHeight);
+    setEditUnit(currentUnit);
+    setShowDimensionModal(true);
+  };
+
+  const handleApplyPreset = (len: number, wid: number, hgt: number, u: string = 'ft') => {
+    setEditLength(len);
+    setEditWidth(wid);
+    setEditHeight(hgt);
+    setEditUnit(u);
+  };
 
   const handleSaveDimensions = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!facility) return;
+    if (editLength <= 0 || editWidth <= 0 || editHeight <= 0) {
+      setSaveStatus({ type: 'error', message: 'All dimensions must be greater than zero.' });
+      return;
+    }
+
+    const facId = facility?.id || 'fac-01';
     setIsSavingDim(true);
+    setSaveStatus(null);
+
     try {
-      await api.updateFacility(facility.id, {
-        length_ft: editLength,
-        width_ft: editWidth,
-        height_ft: editHeight
+      await api.updateFacility(facId, {
+        length_ft: Number(editLength),
+        width_ft: Number(editWidth),
+        height_ft: Number(editHeight),
+        dimensions_unit: editUnit
       });
-      setShowDimensionModal(false);
-      if (onRefreshFacility) onRefreshFacility();
+
+      setSaveStatus({ type: 'success', message: 'Cold store dimensions updated successfully!' });
+      if (onRefreshFacility) {
+        onRefreshFacility();
+      }
+
+      setTimeout(() => {
+        setShowDimensionModal(false);
+        setSaveStatus(null);
+      }, 900);
     } catch (err: any) {
-      alert(`Failed to save dimensions: ${err.message}`);
+      setSaveStatus({ type: 'error', message: err?.message || 'Failed to update dimensions.' });
     } finally {
       setIsSavingDim(false);
     }
   };
 
-  // Helper to extract sensor value for a device
+  // Helper to safely extract and format sensor values for nodes
   const getNodeValue = (device: ESPDevice, metric: string): { val: number | null; text: string; color: string } => {
     const s = device.sensors?.find((x) => x.sensor_type === metric);
     if (!s || device.is_online === 0) {
       return { val: null, text: device.is_online === 0 ? 'OFF' : '--', color: '#64748b' };
     }
-    const v = s.calibrated_reading;
+
+    const rawNum = typeof s.calibrated_reading === 'number' && !isNaN(s.calibrated_reading)
+      ? s.calibrated_reading
+      : (typeof s.raw_reading === 'number' && !isNaN(s.raw_reading) ? s.raw_reading : null);
+
+    if (rawNum === null) {
+      return { val: null, text: 'N/A', color: '#64748b' };
+    }
+
     if (metric === 'temperature') {
-      const col = v < 2 ? '#38bdf8' : v <= 4.5 ? '#10b981' : v <= 6 ? '#f59e0b' : '#ef4444';
-      return { val: v, text: `${v.toFixed(1)}°C`, color: col };
+      const col = rawNum < 2 ? '#38bdf8' : rawNum <= 4.5 ? '#10b981' : rawNum <= 6 ? '#f59e0b' : '#ef4444';
+      return { val: rawNum, text: `${rawNum.toFixed(1)}°C`, color: col };
     }
     if (metric === 'humidity') {
-      const col = v < 80 ? '#f59e0b' : v <= 95 ? '#06b6d4' : '#6366f1';
-      return { val: v, text: `${Math.round(v)}%`, color: col };
+      const col = rawNum < 80 ? '#f59e0b' : rawNum <= 95 ? '#06b6d4' : '#6366f1';
+      return { val: rawNum, text: `${Math.round(rawNum)}%`, color: col };
+    }
+    if (metric === 'co2') {
+      const col = rawNum < 800 ? '#10b981' : rawNum <= 1200 ? '#f59e0b' : '#ef4444';
+      return { val: rawNum, text: `${Math.round(rawNum)} ppm`, color: col };
     }
     if (metric === 'mq3') {
-      const col = v < 1.0 ? '#10b981' : v < 2.0 ? '#f59e0b' : '#ef4444';
-      return { val: v, text: `${v.toFixed(2)} ppm`, color: col };
+      const col = rawNum < 1.0 ? '#10b981' : rawNum < 2.0 ? '#f59e0b' : '#ef4444';
+      return { val: rawNum, text: `${rawNum.toFixed(2)} ppm`, color: col };
     }
     if (metric === 'mq135') {
-      const col = v < 30 ? '#10b981' : v < 60 ? '#f59e0b' : '#ef4444';
-      return { val: v, text: `${v.toFixed(1)} ppm`, color: col };
+      const col = rawNum < 30 ? '#10b981' : rawNum < 60 ? '#f59e0b' : '#ef4444';
+      return { val: rawNum, text: `${rawNum.toFixed(1)} ppm`, color: col };
     }
-    return { val: v, text: `${v}`, color: '#10b981' };
+
+    return { val: rawNum, text: `${rawNum.toFixed(1)}`, color: '#10b981' };
   };
 
-  // Canvas scaling: 1000px length representation
+  // Canvas scaling & responsive aspect ratio calculations
   const mapWidth = 920;
-  const mapHeight = Math.round((widthFt / lengthFt) * mapWidth);
+  const rawHeight = Math.round((safeWidth / safeLength) * mapWidth);
+  const mapHeight = Math.max(340, Math.min(680, rawHeight));
   const wallPadding = 45;
+
+  // Safe node coordinate mapping
+  const getDeviceCoords = (d: ESPDevice) => {
+    const rawX = typeof d.pos_x === 'number' && !isNaN(d.pos_x) ? d.pos_x : 30;
+    const rawY = typeof d.pos_y === 'number' && !isNaN(d.pos_y) ? d.pos_y : 30;
+    const marginX = Math.min(8, safeLength * 0.05);
+    const marginY = Math.min(8, safeWidth * 0.05);
+    const clampedX = Math.min(Math.max(rawX, marginX), Math.max(marginX, safeLength - marginX));
+    const clampedY = Math.min(Math.max(rawY, marginY), Math.max(marginY, safeWidth - marginY));
+    const px = wallPadding + (clampedX / safeLength) * mapWidth;
+    const py = wallPadding + (clampedY / safeWidth) * mapHeight;
+    return { px, py };
+  };
+
+  const onlineCount = devices.filter(d => d.is_online === 1).length;
 
   return (
     <div className="bg-vault-900 border border-vault-800 rounded-2xl p-5 shadow-xl space-y-4">
-      {/* Map Header & Controls */}
+      {/* Map Header & Controls — dimensions are NOT shown here */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold text-white tracking-tight">Cold Store 2D Spatial Layout</h3>
-            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-vault-800 text-vault-300 border border-vault-700">
-              {lengthFt} × {widthFt} × {heightFt} {unit}
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              {onlineCount}/{devices.length} Nodes Active
             </span>
           </div>
           <p className="text-xs text-vault-400 mt-0.5">
-            Physical sensor node placement inside insulated storage vault. Direct-to-wall RS-485 link & ESP-NOW mesh.
+            Physical sensor node telemetry inside insulated storage vault. Direct-to-wall RS-485 link & ESP-NOW mesh.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Metric Selector */}
           <div className="flex items-center bg-vault-950 p-1 rounded-lg border border-vault-800 text-xs">
             <button
@@ -135,6 +204,15 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
               <span>Humidity</span>
             </button>
             <button
+              onClick={() => setActiveMetric('co2')}
+              className={`px-2.5 py-1 rounded font-medium flex items-center gap-1 transition ${
+                activeMetric === 'co2' ? 'bg-agri-600 text-white font-bold' : 'text-vault-400 hover:text-white'
+              }`}
+            >
+              <Activity className="w-3 h-3" />
+              <span>CO2</span>
+            </button>
+            <button
               onClick={() => setActiveMetric('mq3')}
               className={`px-2.5 py-1 rounded font-medium flex items-center gap-1 transition ${
                 activeMetric === 'mq3' ? 'bg-agri-600 text-white font-bold' : 'text-vault-400 hover:text-white'
@@ -154,17 +232,19 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
             </button>
           </div>
 
+          {/* User dimension configuration trigger */}
           <button
-            onClick={() => setShowDimensionModal(true)}
-            className="px-3 py-1.5 rounded-lg bg-vault-800 hover:bg-vault-700 text-vault-200 border border-vault-700 text-xs font-semibold flex items-center gap-1.5 transition"
+            onClick={handleOpenDimensionModal}
+            className="px-3 py-1.5 rounded-lg bg-vault-800 hover:bg-vault-700 text-vault-200 border border-vault-700 text-xs font-semibold flex items-center gap-1.5 transition shadow-sm hover:border-agri-500/50"
+            title="Configure cold store physical dimensions"
           >
-            <Settings2 className="w-3.5 h-3.5" />
-            <span>Dimensions</span>
+            <Settings2 className="w-3.5 h-3.5 text-agri-400" />
+            <span>Set Dimensions</span>
           </button>
         </div>
       </div>
 
-      {/* Interactive Cold Store Floor Plan SVG */}
+      {/* Interactive Cold Store Floor Plan SVG (dimensions are completely hidden) */}
       <div className="relative bg-vault-950/80 rounded-xl border border-vault-800/80 p-3 overflow-x-auto flex justify-center">
         <svg
           viewBox={`0 0 ${mapWidth + wallPadding * 2} ${mapHeight + wallPadding * 2}`}
@@ -280,7 +360,7 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
             x={wallPadding + 20}
             y={wallPadding + 75}
             width={mapWidth * 0.45}
-            height={mapHeight - 95}
+            height={Math.max(90, mapHeight - 105)}
             fill="#1e293b"
             fillOpacity="0.25"
             stroke="#334155"
@@ -296,7 +376,7 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
             x={wallPadding + mapWidth * 0.50}
             y={wallPadding + 75}
             width={mapWidth * 0.45}
-            height={mapHeight - 95}
+            height={Math.max(90, mapHeight - 105)}
             fill="#1e293b"
             fillOpacity="0.25"
             stroke="#334155"
@@ -309,8 +389,7 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
 
           {/* Node Wireless Links to Inner Gateway */}
           {devices.map((d) => {
-            const px = wallPadding + (Math.min(Math.max(d.pos_x ?? 30, 5), lengthFt - 5) / lengthFt) * mapWidth;
-            const py = wallPadding + (Math.min(Math.max(d.pos_y ?? 30, 5), widthFt - 5) / widthFt) * mapHeight;
+            const { px, py } = getDeviceCoords(d);
             const igX = wallPadding + 145;
             const igY = wallPadding + 42;
 
@@ -331,8 +410,7 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
 
           {/* Sensor Nodes on the Map */}
           {devices.map((d) => {
-            const px = wallPadding + (Math.min(Math.max(d.pos_x ?? 30, 5), lengthFt - 5) / lengthFt) * mapWidth;
-            const py = wallPadding + (Math.min(Math.max(d.pos_y ?? 30, 5), widthFt - 5) / widthFt) * mapHeight;
+            const { px, py } = getDeviceCoords(d);
             const metricData = getNodeValue(d, activeMetric);
             const isSelected = selectedNode?.id === d.id;
             const isPending = d.registration_status === 'pending';
@@ -344,7 +422,6 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
                 className="cursor-pointer"
                 onClick={() => {
                   setSelectedNode(d);
-                  if (onSelectDevice) onSelectDevice(d.id);
                 }}
               >
                 {/* Ping animation if online */}
@@ -385,16 +462,16 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
             );
           })}
 
-          {/* Map Dimensions Watermark */}
+          {/* Clean Facility Identification (Zero dimension measurements displayed) */}
           <text
-            x={wallPadding + mapWidth - 160}
+            x={wallPadding + mapWidth - 190}
             y={wallPadding + mapHeight - 15}
             fill="#475569"
             fontSize="10"
             fontWeight="bold"
             fontFamily="monospace"
           >
-            Vault: {lengthFt}L × {widthFt}W × {heightFt}H ({unit})
+            {facility?.name || 'Cold Storage Chamber Layout'}
           </text>
         </svg>
       </div>
@@ -426,29 +503,49 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
                 )}
               </div>
               <p className="text-xs text-vault-400 mt-0.5 flex flex-wrap gap-2">
-                <span>MAC: <code className="text-vault-300">{selectedNode.hardware_id || selectedNode.mac_address}</code></span>
+                <span>MAC: <code className="text-vault-300">{selectedNode.hardware_id || selectedNode.mac_address || '--'}</code></span>
                 <span>•</span>
                 <span>Location: {selectedNode.cold_store_name || 'Cold Store A'} / {selectedNode.zone_name || 'North Zone'} / {selectedNode.rack_name || 'Rack 1'} ({selectedNode.level_name || 'Level 1'})</span>
                 <span>•</span>
-                <span>RSSI: {selectedNode.signal_rssi} dBm</span>
+                <span>RSSI: {typeof selectedNode.signal_rssi === 'number' ? `${selectedNode.signal_rssi} dBm` : '-65 dBm'}</span>
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex gap-2 text-xs">
-              {selectedNode.sensors?.map((s) => (
-                <div key={s.id} className="bg-vault-900 px-2 py-1 rounded border border-vault-800">
-                  <span className="text-[10px] text-vault-400 block uppercase">{s.sensor_type}</span>
-                  <span className="font-bold text-white font-mono">
-                    {s.calibrated_reading.toFixed(1)} {s.unit}
-                  </span>
-                </div>
-              ))}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex gap-2 text-xs flex-wrap">
+              {selectedNode.sensors?.map((s) => {
+                const reading = typeof s.calibrated_reading === 'number' && !isNaN(s.calibrated_reading)
+                  ? s.calibrated_reading.toFixed(1)
+                  : typeof s.raw_reading === 'number' && !isNaN(s.raw_reading)
+                    ? s.raw_reading.toFixed(1)
+                    : '--';
+                return (
+                  <div key={s.id} className="bg-vault-900 px-2.5 py-1 rounded border border-vault-800">
+                    <span className="text-[10px] text-vault-400 block uppercase font-mono">{s.sensor_type}</span>
+                    <span className="font-bold text-white font-mono">
+                      {reading} {s.unit || ''}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
+
+            {onSelectDevice && (
+              <button
+                onClick={() => onSelectDevice(selectedNode.id)}
+                className="px-2.5 py-1.5 rounded-lg bg-agri-600/30 hover:bg-agri-600 text-agri-300 hover:text-white border border-agri-500/40 text-xs font-semibold flex items-center gap-1 transition"
+                title="Open node configuration and placement modal"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Configure Node</span>
+              </button>
+            )}
+
             <button
               onClick={() => setSelectedNode(null)}
               className="p-1 rounded text-vault-400 hover:text-white"
+              title="Close inspector"
             >
               <X className="w-4 h-4" />
             </button>
@@ -456,77 +553,169 @@ export const ColdStoreMap: React.FC<ColdStoreMapProps> = ({
         </div>
       )}
 
-      {/* Edit Dimensions Modal */}
+      {/* User-Controlled Dimension Configuration Modal */}
       {showDimensionModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-vault-900 border border-vault-750 rounded-2xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-vault-900 border border-vault-700 rounded-2xl w-full max-w-md p-6 shadow-2xl animate-in zoom-in-95">
             <div className="flex items-center justify-between pb-3 border-b border-vault-800 mb-4">
-              <h3 className="text-base font-bold text-white">Configure Cold Store Dimensions</h3>
-              <button onClick={() => setShowDimensionModal(false)} className="text-vault-400 hover:text-white">
+              <div className="flex items-center gap-2">
+                <Settings2 className="w-5 h-5 text-agri-400" />
+                <div>
+                  <h3 className="text-base font-bold text-white">Set Cold Store Dimensions</h3>
+                  <p className="text-xs text-vault-400">Configure chamber geometry for floorplan layout & positioning</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDimensionModal(false)}
+                className="text-vault-400 hover:text-white p-1 rounded-lg hover:bg-vault-800 transition"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
+            {/* Dimension Presets */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-vault-400 mb-1.5">Quick Presets</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset(80, 50, 24, editUnit)}
+                  className="px-2 py-1.5 rounded-lg bg-vault-950 hover:bg-vault-800 border border-vault-800 text-[11px] text-vault-300 hover:text-white transition text-center"
+                >
+                  <span className="font-semibold block">Small Room</span>
+                  <span className="text-[10px] text-vault-500 font-mono">80×50×24</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset(162, 94, 48, editUnit)}
+                  className="px-2 py-1.5 rounded-lg bg-vault-950 hover:bg-vault-800 border border-vault-800 text-[11px] text-vault-300 hover:text-white transition text-center"
+                >
+                  <span className="font-semibold block">Standard Vault</span>
+                  <span className="text-[10px] text-vault-500 font-mono">162×94×48</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyPreset(300, 160, 60, editUnit)}
+                  className="px-2 py-1.5 rounded-lg bg-vault-950 hover:bg-vault-800 border border-vault-800 text-[11px] text-vault-300 hover:text-white transition text-center"
+                >
+                  <span className="font-semibold block">Mega Warehouse</span>
+                  <span className="text-[10px] text-vault-500 font-mono">300×160×60</span>
+                </button>
+              </div>
+            </div>
+
             <form onSubmit={handleSaveDimensions} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-vault-300 mb-1">
-                  Length ({unit})
-                </label>
-                <input
-                  type="number"
-                  min="20"
-                  max="1000"
-                  value={editLength}
-                  onChange={(e) => setEditLength(Number(e.target.value))}
-                  required
-                  className="w-full bg-vault-950 border border-vault-800 rounded-lg px-3 py-2 text-xs text-white font-mono font-bold"
-                />
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-vault-300 mb-1">
+                    Length ({editUnit})
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="5000"
+                    step="1"
+                    value={editLength}
+                    onChange={(e) => setEditLength(Math.max(1, Number(e.target.value)))}
+                    required
+                    className="w-full bg-vault-950 border border-vault-800 focus:border-agri-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-vault-300 mb-1">
+                    Width ({editUnit})
+                  </label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="5000"
+                    step="1"
+                    value={editWidth}
+                    onChange={(e) => setEditWidth(Math.max(1, Number(e.target.value)))}
+                    required
+                    className="w-full bg-vault-950 border border-vault-800 focus:border-agri-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-vault-300 mb-1">
+                    Height ({editUnit})
+                  </label>
+                  <input
+                    type="number"
+                    min="5"
+                    max="500"
+                    step="1"
+                    value={editHeight}
+                    onChange={(e) => setEditHeight(Math.max(1, Number(e.target.value)))}
+                    required
+                    className="w-full bg-vault-950 border border-vault-800 focus:border-agri-500 focus:outline-none rounded-lg px-3 py-2 text-xs text-white font-mono font-bold"
+                  />
+                </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-vault-300 mb-1">
-                  Width ({unit})
+                  Measurement Unit
                 </label>
-                <input
-                  type="number"
-                  min="20"
-                  max="1000"
-                  value={editWidth}
-                  onChange={(e) => setEditWidth(Number(e.target.value))}
-                  required
-                  className="w-full bg-vault-950 border border-vault-800 rounded-lg px-3 py-2 text-xs text-white font-mono font-bold"
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditUnit('ft')}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold border transition ${
+                      editUnit === 'ft'
+                        ? 'bg-agri-600 text-white border-agri-500'
+                        : 'bg-vault-950 text-vault-400 border-vault-800 hover:text-white'
+                    }`}
+                  >
+                    Feet (ft)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditUnit('m')}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-bold border transition ${
+                      editUnit === 'm'
+                        ? 'bg-agri-600 text-white border-agri-500'
+                        : 'bg-vault-950 text-vault-400 border-vault-800 hover:text-white'
+                    }`}
+                  >
+                    Meters (m)
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-vault-300 mb-1">
-                  Height ({unit})
-                </label>
-                <input
-                  type="number"
-                  min="10"
-                  max="200"
-                  value={editHeight}
-                  onChange={(e) => setEditHeight(Number(e.target.value))}
-                  required
-                  className="w-full bg-vault-950 border border-vault-800 rounded-lg px-3 py-2 text-xs text-white font-mono font-bold"
-                />
-              </div>
+              {saveStatus && (
+                <div
+                  className={`p-2.5 rounded-lg text-xs flex items-center gap-2 ${
+                    saveStatus.type === 'success'
+                      ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-300'
+                      : 'bg-rose-500/20 border border-rose-500/40 text-rose-300'
+                  }`}
+                >
+                  {saveStatus.type === 'success' ? (
+                    <Check className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <X className="w-4 h-4 text-rose-400" />
+                  )}
+                  <span>{saveStatus.message}</span>
+                </div>
+              )}
 
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setShowDimensionModal(false)}
-                  className="px-4 py-2 rounded-lg bg-vault-800 text-vault-300 text-xs font-semibold"
+                  className="px-4 py-2 rounded-lg bg-vault-800 hover:bg-vault-700 text-vault-300 text-xs font-semibold transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSavingDim}
-                  className="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-bold transition disabled:opacity-50"
+                  className="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5 shadow-md shadow-agri-600/30"
                 >
-                  Save Dimensions
+                  {isSavingDim ? 'Saving...' : 'Save Dimensions'}
                 </button>
               </div>
             </form>

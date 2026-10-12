@@ -10,7 +10,8 @@ import {
   CheckCircle,
   Building2,
   Layers,
-  UserCheck
+  UserCheck,
+  Ruler
 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
@@ -34,6 +35,48 @@ export const SettingsPage: React.FC = () => {
 
   const canEdit = role === 'Owner' || role === 'Admin';
   const areas = overview?.areas || [];
+
+  // Facility Cold Store Dimension Configuration
+  const facility = overview?.facility;
+  const [facLength, setFacLength] = useState<number>(facility?.length_ft || 162);
+  const [facWidth, setFacWidth] = useState<number>(facility?.width_ft || 94);
+  const [facHeight, setFacHeight] = useState<number>(facility?.height_ft || 48);
+  const [facUnit, setFacUnit] = useState<string>(facility?.dimensions_unit || 'ft');
+  const [isSavingFacDim, setIsSavingFacDim] = useState(false);
+  const [facDimSuccess, setFacDimSuccess] = useState(false);
+
+  useEffect(() => {
+    if (facility) {
+      setFacLength(facility.length_ft || 162);
+      setFacWidth(facility.width_ft || 94);
+      setFacHeight(facility.height_ft || 48);
+      setFacUnit(facility.dimensions_unit || 'ft');
+    }
+  }, [facility]);
+
+  const handleSaveFacilityDimensions = async () => {
+    if (!canEdit) {
+      alert(`Role ${role} cannot edit facility geometry. Owner or Admin required.`);
+      return;
+    }
+    setIsSavingFacDim(true);
+    setFacDimSuccess(false);
+    try {
+      await api.updateFacility(facility?.id || 'fac-01', {
+        length_ft: Number(facLength),
+        width_ft: Number(facWidth),
+        height_ft: Number(facHeight),
+        dimensions_unit: facUnit
+      });
+      setFacDimSuccess(true);
+      await refreshOverview();
+      setTimeout(() => setFacDimSuccess(false), 3000);
+    } catch (err: any) {
+      alert(`Failed to save dimensions: ${err?.message}`);
+    } finally {
+      setIsSavingFacDim(false);
+    }
+  };
 
   const loadThresholds = async () => {
     try {
@@ -346,6 +389,100 @@ export const SettingsPage: React.FC = () => {
                 />
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Cold Store Facility Dimensions Card */}
+      <div className="bg-vault-900 border border-vault-800 rounded-2xl p-5 lg:p-6 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-vault-800 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-xl bg-agri-500/20 text-agri-400 border border-agri-500/30">
+              <Ruler className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white tracking-tight">
+                Cold Store Physical Dimensions
+              </h3>
+              <p className="text-xs text-vault-400">
+                Configure physical chamber sizing. Floorplan layouts and node coordinate maps scale dynamically to these specifications.
+              </p>
+            </div>
+          </div>
+
+          {canEdit && (
+            <button
+              onClick={handleSaveFacilityDimensions}
+              disabled={isSavingFacDim}
+              className="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-agri-600/30 transition disabled:opacity-50 self-start sm:self-auto"
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span>{isSavingFacDim ? 'Saving...' : 'Save Dimensions'}</span>
+            </button>
+          )}
+        </div>
+
+        {facDimSuccess && (
+          <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-xl text-emerald-400 text-xs flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" />
+            <span>Cold store physical dimensions updated successfully across all views and coordinate engines!</span>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <div className="bg-vault-950 p-4 rounded-xl border border-vault-800">
+            <label className="text-vault-400 block mb-1 text-xs font-medium">Length ({facUnit})</label>
+            <input
+              type="number"
+              min="10"
+              max="5000"
+              step="1"
+              value={facLength}
+              disabled={!canEdit}
+              onChange={(e) => setFacLength(Math.max(1, Number(e.target.value)))}
+              className="w-full bg-vault-900 border border-vault-700 rounded-lg px-3 py-1.5 text-white font-mono text-sm focus:border-agri-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="bg-vault-950 p-4 rounded-xl border border-vault-800">
+            <label className="text-vault-400 block mb-1 text-xs font-medium">Width ({facUnit})</label>
+            <input
+              type="number"
+              min="10"
+              max="5000"
+              step="1"
+              value={facWidth}
+              disabled={!canEdit}
+              onChange={(e) => setFacWidth(Math.max(1, Number(e.target.value)))}
+              className="w-full bg-vault-900 border border-vault-700 rounded-lg px-3 py-1.5 text-white font-mono text-sm focus:border-agri-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="bg-vault-950 p-4 rounded-xl border border-vault-800">
+            <label className="text-vault-400 block mb-1 text-xs font-medium">Height ({facUnit})</label>
+            <input
+              type="number"
+              min="5"
+              max="500"
+              step="1"
+              value={facHeight}
+              disabled={!canEdit}
+              onChange={(e) => setFacHeight(Math.max(1, Number(e.target.value)))}
+              className="w-full bg-vault-900 border border-vault-700 rounded-lg px-3 py-1.5 text-white font-mono text-sm focus:border-agri-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="bg-vault-950 p-4 rounded-xl border border-vault-800">
+            <label className="text-vault-400 block mb-1 text-xs font-medium">Measurement Unit</label>
+            <select
+              value={facUnit}
+              disabled={!canEdit}
+              onChange={(e) => setFacUnit(e.target.value)}
+              className="w-full bg-vault-900 border border-vault-700 rounded-lg px-3 py-1.5 text-white font-mono text-sm focus:border-agri-500 focus:outline-none"
+            >
+              <option value="ft">Feet (ft)</option>
+              <option value="m">Meters (m)</option>
+            </select>
           </div>
         </div>
       </div>

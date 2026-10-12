@@ -13,6 +13,9 @@ function isDeepEqual(a: any, b: any): boolean {
 interface AppContextType {
   facilityId: string;
   facility: Facility | null;
+  facilities: Facility[];
+  areas: any[];
+  devices: any[];
   overview: any | null;
   alerts: Alert[];
   isWsConnected: boolean;
@@ -22,6 +25,7 @@ interface AppContextType {
   simulationStatus: any | null;
   showOnboarding: boolean;
   setShowOnboarding: (val: boolean) => void;
+  loadInitialData: () => Promise<void>;
   refreshOverview: () => Promise<void>;
   refreshAlerts: () => Promise<void>;
   setSimulationScenario: (scenario: string) => Promise<void>;
@@ -34,6 +38,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [facilityId, setFacilityId] = useState('fac-01');
   const [facility, setFacility] = useState<Facility | null>(null);
+  const [facilities, setFacilities] = useState<Facility[]>([]);
+  const [devicesList, setDevicesList] = useState<any[]>([]);
   const [overview, setOverview] = useState<any | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [isWsConnected, setIsWsConnected] = useState(false);
@@ -292,11 +298,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     refreshAlerts();
   };
 
+  const loadInitialData = useCallback(async () => {
+    try {
+      await Promise.all([
+        refreshOverview(),
+        refreshAlerts(),
+        refreshSimulation(),
+        api.getFacilities().then(res => setFacilities(res)).catch(() => {}),
+        api.getDevices().then(res => setDevicesList(res)).catch(() => {})
+      ]);
+    } catch {
+      // ignore
+    }
+  }, [refreshOverview, refreshAlerts, refreshSimulation]);
+
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  const areas = overview?.areas || [];
+  const devices = devicesList.length > 0 ? devicesList : (overview?.devices || []);
+
   return (
     <AppContext.Provider
       value={{
         facilityId,
         facility,
+        facilities,
+        areas,
+        devices,
         overview,
         alerts,
         isWsConnected,
@@ -306,6 +336,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         simulationStatus,
         showOnboarding,
         setShowOnboarding,
+        loadInitialData,
         refreshOverview,
         refreshAlerts,
         setSimulationScenario,
