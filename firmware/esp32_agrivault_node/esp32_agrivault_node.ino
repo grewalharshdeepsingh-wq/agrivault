@@ -459,6 +459,14 @@ void transmitTelemetry() {
     if (response.indexOf("RECONFIGURE_WIFI") >= 0) {
       Serial.println(F("[Command] Remote Wi-Fi reconfiguration requested by Agrivault server!"));
       startProvisioningAP();
+    } else if (response.indexOf("RELAY_ON") >= 0) {
+      Serial.println(F("[Command] Turn Relay ON (GPIO 26 energized)"));
+      digitalWrite(PIN_RELAY, HIGH);
+      relayState = true;
+    } else if (response.indexOf("RELAY_OFF") >= 0) {
+      Serial.println(F("[Command] Turn Relay OFF (GPIO 26 de-energized)"));
+      digitalWrite(PIN_RELAY, LOW);
+      relayState = false;
     }
   } else {
     Serial.printf("[Telemetry Error] HTTP Code %d (Error: %s)\n", httpCode, http.errorToString(httpCode).c_str());
