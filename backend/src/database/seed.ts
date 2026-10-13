@@ -121,5 +121,11 @@ export function seedDatabase(): void {
   console.log('[Seed] Production database ready. Zero mock devices or areas. Pure live mode.');
 }
 
-seedDatabase();
+// Only auto-run if executed directly via CLI
+if (typeof process !== 'undefined' && process.argv[1] && (process.argv[1].endsWith('seed.ts') || process.argv[1].endsWith('seed.js'))) {
+  (async () => {
+    await initDatabase();
+    seedDatabase();
+  })();
+}
 
