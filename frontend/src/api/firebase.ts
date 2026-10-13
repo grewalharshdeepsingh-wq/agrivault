@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set, update, get } from 'firebase/database';
+import { getDatabase, ref, onValue, update } from 'firebase/database';
 import { ESPDevice, Sensor } from '../types';
 import { wsManager } from './websocket';
 import { stateMesh } from './stateMesh';
@@ -20,98 +20,72 @@ export const firebaseDb = getDatabase(app);
 
 // In-memory cache of live devices received from Firebase Realtime Database
 const firebaseDevicesMap = new Map<string, ESPDevice>();
+const discoveredDevicesSet = new Set<string>();
+const lastDeviceSignatures = new Map<string, string>();
 let isInitialized = false;
 
-function buildSensors(deviceId: string, areaId: string | null, raw: any): Sensor[] {
+function getOrBuildSensor(
+  deviceId: string,
+  areaId: string | null,
+  type: string,
+  name: string,
+  unit: string,
+  pin: string,
+  val: number,
+  existingSensors?: Sensor[]
+): Sensor {
+  const existing = existingSensors?.find((s) => s.sensor_type === type);
+  if (existing && existing.calibrated_reading === val) {
+    return existing; // Preserve stable object reference
+  }
+  return {
+    id: `sens-${deviceId}-${type}`,
+    device_id: deviceId,
+    area_id: areaId || '',
+    sensor_type: type,
+    name,
+    unit,
+    pin,
+    raw_reading: val,
+    calibrated_reading: val,
+    rate_of_change: 0,
+    rate_of_change_period: '30 min',
+    calibration_status: 'factory_default',
+    confidence_score: 95,
+    sensor_health: 'healthy',
+    last_reading_time: existing?.last_reading_time || new Date().toISOString()
+  };
+}
+
+function buildSensors(deviceId: string, areaId: string | null, raw: any, existingSensors?: Sensor[]): Sensor[] {
   if (Array.isArray(raw.sensors) && raw.sensors.length > 0) {
     return raw.sensors;
   }
 
   const sensors: Sensor[] = [];
-  const nowStr = new Date().toISOString();
 
   if (raw.temperature !== undefined && raw.temperature !== null) {
-    const val = Number(raw.temperature);
-    sensors.push({
-      id: `sens-${deviceId}-temperature`,
-      device_id: deviceId,
-      area_id: areaId || '',
-      sensor_type: 'temperature',
-      name: 'Temperature Probe (DS18B20)',
-      unit: '°C',
-      pin: 'GPIO 4',
-      raw_reading: val,
-      calibrated_reading: val,
-      rate_of_change: 0,
-      rate_of_change_period: '30 min',
-      calibration_status: 'factory_default',
-      confidence_score: 95,
-      sensor_health: 'healthy',
-      last_reading_time: nowStr
-    });
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'temperature', 'Temperature Probe (DS18B20)', '°C', 'GPIO 4', Number(raw.temperature), existingSensors
+    ));
   }
 
   if (raw.humidity !== undefined && raw.humidity !== null && Number(raw.humidity) > 0) {
-    const val = Number(raw.humidity);
-    sensors.push({
-      id: `sens-${deviceId}-humidity`,
-      device_id: deviceId,
-      area_id: areaId || '',
-      sensor_type: 'humidity',
-      name: 'Relative Humidity (DHT11)',
-      unit: '%',
-      pin: 'GPIO 32',
-      raw_reading: val,
-      calibrated_reading: val,
-      rate_of_change: 0,
-      rate_of_change_period: '30 min',
-      calibration_status: 'factory_default',
-      confidence_score: 90,
-      sensor_health: 'healthy',
-      last_reading_time: nowStr
-    });
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'humidity', 'Relative Humidity (DHT11)', '%', 'GPIO 32', Number(raw.humidity), existingSensors
+    ));
   }
 
   if (raw.mq3 !== undefined && raw.mq3 !== null) {
-    const val = Number(raw.mq3);
-    sensors.push({
-      id: `sens-${deviceId}-mq3`,
-      device_id: deviceId,
-      area_id: areaId || '',
-      sensor_type: 'mq3',
-      name: 'Volatiles & Fermentation (MQ-3)',
-      unit: 'ppm',
-      pin: 'GPIO 35',
-      raw_reading: val,
-      calibrated_reading: val,
-      rate_of_change: 0,
-      rate_of_change_period: '30 min',
-      calibration_status: 'factory_default',
-      confidence_score: 90,
-      sensor_health: 'healthy',
-      last_reading_time: nowStr
-    });
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'mq3', 'Volatiles & Fermentation (MQ-3)', 'ppm', 'GPIO 35', Number(raw.mq3), existingSensors
+    ));
   }
 
   if (raw.mq135 !== undefined && raw.mq135 !== null) {
-    const val = Number(raw.mq135);
-    sensors.push({
-      id: `sens-${deviceId}-mq135`,
-      device_id: deviceId,
-      area_id: areaId || '',
-      sensor_type: 'mq135',
-      name: 'Air Quality & Respiration (MQ-135)',
-      unit: 'ppm',
-      pin: 'GPIO 34',
-      raw_reading: val,
-      calibrated_reading: val,
-      rate_of_change: 0,
-      rate_of_change_period: '30 min',
-      calibration_status: 'factory_default',
-      confidence_score: 90,
-      sensor_health: 'healthy',
-      last_reading_time: nowStr
-    });
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'mq135', 'Air Quality & Respiration (MQ-135)', 'ppm', 'GPIO 34', Number(raw.mq135), existingSensors
+    ));
   }
 
   return sensors;
@@ -121,23 +95,25 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
   const normId = (id || raw.deviceId || raw.id || 'ESP32-UNKNOWN').trim().toUpperCase();
   const assignments = stateMesh.getAssignments();
   const assignedAreaId = assignments[normId] || raw.area_id || raw.areaId || null;
+  const existingDev = firebaseDevicesMap.get(normId);
 
   const nowMs = Date.now();
   const rawHb = raw.last_heartbeat ?? raw.lastHeartbeat ?? raw.timestamp;
-  let lastHbStr = new Date().toISOString();
+  let lastHbStr = existingDev?.last_heartbeat || new Date().toISOString();
   let isOnline = raw.is_online !== undefined ? Number(raw.is_online) : 1;
 
   if (typeof rawHb === 'number') {
     if (rawHb > 1577836800000) {
       lastHbStr = new Date(rawHb).toISOString();
-      isOnline = (nowMs - rawHb < 60000) ? 1 : 0;
+      isOnline = nowMs - rawHb < 60000 ? 1 : 0;
     } else {
-      lastHbStr = new Date().toISOString();
       isOnline = 1;
     }
   } else if (typeof rawHb === 'string') {
     lastHbStr = rawHb;
   }
+
+  const sensors = buildSensors(normId, assignedAreaId, raw, existingDev?.sensors);
 
   return {
     id: normId,
@@ -172,7 +148,7 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
     is_simulated: 0,
     installation_date: raw.installation_date || new Date().toISOString().split('T')[0],
     area_name: raw.area_name || null,
-    sensors: buildSensors(normId, assignedAreaId, raw)
+    sensors
   };
 }
 
@@ -190,14 +166,29 @@ export function initFirebaseRealtime(): void {
         if (!val || typeof val !== 'object') return;
         if (val.is_simulated === 1) return;
 
-        const dev = rawToESPDevice(key, val);
-        firebaseDevicesMap.set(dev.id.toUpperCase(), dev);
+        const normId = (key || val.deviceId || val.id || '').trim().toUpperCase();
+        if (!normId) return;
 
-        // Forward live update into AgriVault's WebSocket and Mesh managers
-        wsManager.emit('device_updated', dev);
-        wsManager.emit('device_discovered', { device: dev });
-        if (dev.sensors && dev.sensors.length > 0) {
-          wsManager.emit('telemetry_update', { deviceId: dev.id, readings: dev.sensors });
+        const dev = rawToESPDevice(normId, val);
+        firebaseDevicesMap.set(normId, dev);
+
+        // Compute stable content signature to prevent unnecessary re-render loops
+        const sig = `${normId}|${val.temperature}|${val.humidity}|${val.mq3}|${val.mq135}|${val.relayState}|${val.is_online}|${dev.area_id}|${val.userName || val.user_name}`;
+        const prevSig = lastDeviceSignatures.get(normId);
+
+        // 1. Emit discovery ONLY once per device
+        if (!discoveredDevicesSet.has(normId)) {
+          discoveredDevicesSet.add(normId);
+          wsManager.emit('device_discovered', { device: dev });
+        }
+
+        // 2. Emit updates ONLY when sensor or status values actually change
+        if (prevSig !== sig) {
+          lastDeviceSignatures.set(normId, sig);
+          wsManager.emit('device_updated', dev);
+          if (dev.sensors && dev.sensors.length > 0) {
+            wsManager.emit('telemetry_update', { deviceId: dev.id, readings: dev.sensors });
+          }
         }
       });
     }, (error) => {

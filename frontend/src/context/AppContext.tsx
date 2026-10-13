@@ -202,7 +202,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return [dev, ...prev];
         });
       }
-      refreshOverview();
     });
 
     // 6. Device Updated (Assigned / Renamed / Unassigned)
@@ -219,7 +218,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return [dev, ...prev];
         });
       }
-      refreshOverview();
     });
 
     // 7. Device Deleted

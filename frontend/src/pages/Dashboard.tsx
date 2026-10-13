@@ -95,9 +95,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const unsubUpdate = wsManager.on('device_updated', (dev) => {
       if (dev && dev.id) {
         setAllDevices((prev) => {
-          const exists = prev.some((d) => d.id.toLowerCase() === dev.id.toLowerCase());
-          if (exists) {
-            return prev.map((d) => (d.id.toLowerCase() === dev.id.toLowerCase() ? { ...d, ...dev } : d));
+          const idx = prev.findIndex((d) => d.id.toLowerCase() === dev.id.toLowerCase());
+          if (idx >= 0) {
+            const cur = prev[idx];
+            if (
+              cur.is_online === dev.is_online &&
+              cur.area_id === dev.area_id &&
+              cur.user_name === dev.user_name &&
+              JSON.stringify(cur.sensors) === JSON.stringify(dev.sensors)
+            ) {
+              return prev;
+            }
+            const copy = [...prev];
+            copy[idx] = { ...cur, ...dev };
+            return copy;
           }
           return [dev, ...prev];
         });
@@ -109,9 +120,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (dev && dev.id) {
         setAllDevices((prev) => {
           const exists = prev.some((d) => d.id.toLowerCase() === dev.id.toLowerCase());
-          if (exists) {
-            return prev.map((d) => (d.id.toLowerCase() === dev.id.toLowerCase() ? { ...d, ...dev } : d));
-          }
+          if (exists) return prev;
           return [dev, ...prev];
         });
       }
