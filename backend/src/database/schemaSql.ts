@@ -101,6 +101,11 @@ CREATE TABLE IF NOT EXISTS esp_devices (
     is_enabled INTEGER NOT NULL DEFAULT 1,
     is_discovered INTEGER NOT NULL DEFAULT 0,
     is_simulated INTEGER DEFAULT 0,
+    wifi_ssid TEXT,
+    registration_code TEXT,
+    reconfigure_wifi_pending INTEGER DEFAULT 0,
+    last_valid_reading_time TEXT,
+    staleness_status TEXT DEFAULT 'fresh',
     installation_date TEXT NOT NULL,
     created_at TEXT NOT NULL
 );

@@ -194,9 +194,8 @@ function ensureSchema(database: UniversalDatabase): void {
     if (!check) {
       database.exec(SCHEMA_SQL);
       console.log('[Database] Schema verified and initialized successfully from embedded schema.');
-    } else {
-      runMigrations(database);
     }
+    runMigrations(database);
   } catch (err: any) {
     console.warn('[Database] Schema check notice:', err?.message || err);
   }
