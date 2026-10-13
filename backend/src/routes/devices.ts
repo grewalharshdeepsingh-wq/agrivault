@@ -537,22 +537,30 @@ function processIncomingTelemetry(req: Request, res: Response): void {
 
     // Check for pending remote commands for this device (Architecture A direct link)
     let pendingCmd: string | undefined = undefined;
-    const devRow = db.get<any>('SELECT reconfigure_wifi_pending FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
-    if (devRow?.reconfigure_wifi_pending === 1) {
-      pendingCmd = 'RECONFIGURE_WIFI';
-      db.run('UPDATE esp_devices SET reconfigure_wifi_pending = 0 WHERE id = ? COLLATE NOCASE', deviceId);
+    try {
+      const devRow = db.get<any>('SELECT reconfigure_wifi_pending FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
+      if (devRow?.reconfigure_wifi_pending === 1) {
+        pendingCmd = 'RECONFIGURE_WIFI';
+        db.run('UPDATE esp_devices SET reconfigure_wifi_pending = 0 WHERE id = ? COLLATE NOCASE', deviceId);
+      }
+    } catch {
+      // Ignore column absence on older database instances
     }
 
-    const pendingRelay = db.get<any>(
-      "SELECT id, state FROM relay_devices WHERE device_id = ? COLLATE NOCASE AND command_status = 'COMMAND_REQUESTED'",
-      deviceId
-    );
-    if (pendingRelay) {
-      pendingCmd = pendingRelay.state === 1 ? 'RELAY_ON' : 'RELAY_OFF';
-      db.run(
-        "UPDATE relay_devices SET command_status = 'COMMAND_ACKNOWLEDGED', last_acknowledged_at = datetime('now') WHERE id = ?",
-        pendingRelay.id
+    try {
+      const pendingRelay = db.get<any>(
+        "SELECT id, state FROM relay_devices WHERE device_id = ? COLLATE NOCASE AND command_status = 'COMMAND_REQUESTED'",
+        deviceId
       );
+      if (pendingRelay) {
+        pendingCmd = pendingRelay.state === 1 ? 'RELAY_ON' : 'RELAY_OFF';
+        db.run(
+          "UPDATE relay_devices SET command_status = 'COMMAND_ACKNOWLEDGED', last_acknowledged_at = datetime('now') WHERE id = ?",
+          pendingRelay.id
+        );
+      }
+    } catch {
+      // Ignore if relay_devices table not yet queried
     }
 
     res.status(200).json({
