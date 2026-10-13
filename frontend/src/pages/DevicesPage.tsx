@@ -4,6 +4,7 @@ import { ESPDevice, Area } from '../types';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { stateMesh } from '../api/stateMesh';
+import { wsManager } from '../api/websocket';
 import {
   Cpu,
   Globe,
@@ -64,8 +65,38 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
   useEffect(() => {
     loadDevices();
-    const interval = setInterval(loadDevices, 6000);
-    return () => clearInterval(interval);
+    const interval = setInterval(loadDevices, 5000);
+
+    const unsubUpdate = wsManager.on('device_updated', (dev) => {
+      if (dev && dev.id) {
+        setDevices((prev) => {
+          const exists = prev.some((d) => d.id.toLowerCase() === dev.id.toLowerCase());
+          if (exists) {
+            return prev.map((d) => (d.id.toLowerCase() === dev.id.toLowerCase() ? { ...d, ...dev } : d));
+          }
+          return [dev, ...prev];
+        });
+      }
+    });
+
+    const unsubDiscovered = wsManager.on('device_discovered', (payload) => {
+      const dev = payload?.device;
+      if (dev && dev.id) {
+        setDevices((prev) => {
+          const exists = prev.some((d) => d.id.toLowerCase() === dev.id.toLowerCase());
+          if (exists) {
+            return prev.map((d) => (d.id.toLowerCase() === dev.id.toLowerCase() ? { ...d, ...dev } : d));
+          }
+          return [dev, ...prev];
+        });
+      }
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubUpdate();
+      unsubDiscovered();
+    };
   }, []);
 
   const handleSimulateDiscovery = async (hw: 'ESP32' | 'ESP8266') => {

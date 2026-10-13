@@ -122,9 +122,22 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
   const assignments = stateMesh.getAssignments();
   const assignedAreaId = assignments[normId] || raw.area_id || raw.areaId || null;
 
-  const lastHb = raw.last_heartbeat || raw.lastHeartbeat || raw.timestamp || new Date().toISOString();
-  const lastHbMs = typeof lastHb === 'number' ? lastHb : new Date(lastHb).getTime();
-  const isOnline = Date.now() - lastHbMs < 45000 ? 1 : (raw.is_online !== undefined ? raw.is_online : 1);
+  const nowMs = Date.now();
+  const rawHb = raw.last_heartbeat ?? raw.lastHeartbeat ?? raw.timestamp;
+  let lastHbStr = new Date().toISOString();
+  let isOnline = raw.is_online !== undefined ? Number(raw.is_online) : 1;
+
+  if (typeof rawHb === 'number') {
+    if (rawHb > 1577836800000) {
+      lastHbStr = new Date(rawHb).toISOString();
+      isOnline = (nowMs - rawHb < 60000) ? 1 : 0;
+    } else {
+      lastHbStr = new Date().toISOString();
+      isOnline = 1;
+    }
+  } else if (typeof rawHb === 'string') {
+    lastHbStr = rawHb;
+  }
 
   return {
     id: normId,
@@ -151,7 +164,7 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
     ip_address: raw.ip_address || raw.ipAddress || '192.168.1.1',
     mac_address: raw.mac_address || raw.macAddress || raw.hardware_id || normId,
     is_online: isOnline ? 1 : 0,
-    last_heartbeat: typeof lastHb === 'number' ? new Date(lastHb).toISOString() : lastHb,
+    last_heartbeat: lastHbStr,
     signal_rssi: raw.signal_rssi ?? raw.rssi ?? -60,
     battery_voltage: raw.battery_voltage ?? raw.battery ?? 3.3,
     is_enabled: raw.is_enabled ?? 1,
@@ -175,7 +188,7 @@ export function initFirebaseRealtime(): void {
 
       Object.entries(data).forEach(([key, val]: [string, any]) => {
         if (!val || typeof val !== 'object') return;
-        if (val.is_simulated === 1 || key.startsWith('AGR-ESP-')) return;
+        if (val.is_simulated === 1) return;
 
         const dev = rawToESPDevice(key, val);
         firebaseDevicesMap.set(dev.id.toUpperCase(), dev);

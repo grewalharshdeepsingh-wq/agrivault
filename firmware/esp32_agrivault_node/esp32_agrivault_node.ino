@@ -76,8 +76,8 @@ int wifiFailCount = 0;
 
 // Unique MAC-derived Device ID (e.g. AGR-ESP-A1B2C3)
 String generateDeviceId() {
-  uint8_t mac[6];
-  WiFi.macAddress(mac);
+  uint8_t mac[6] = {0};
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
   char buf[20];
   snprintf(buf, sizeof(buf), "AGR-ESP-%02X%02X%02X", mac[3], mac[4], mac[5]);
   return String(buf);
@@ -509,8 +509,13 @@ void setup() {
   digitalWrite(PIN_RELAY, LOW); // Safe default: Relay OFF
   digitalWrite(PIN_STATUS_LED, LOW);
 
+  uint8_t macInit[6] = {0};
+  esp_read_mac(macInit, ESP_MAC_WIFI_STA);
+  char macBuf[20];
+  snprintf(macBuf, sizeof(macBuf), "%02X:%02X:%02X:%02X:%02X:%02X",
+           macInit[0], macInit[1], macInit[2], macInit[3], macInit[4], macInit[5]);
+  macAddress = String(macBuf);
   deviceId = generateDeviceId();
-  macAddress = WiFi.macAddress();
 
   Serial.println(F("\n========================================================"));
   Serial.println(F("   ❄️ AGRIVAULT INDUSTRIAL ESP32 NODE INITIALIZING"));
