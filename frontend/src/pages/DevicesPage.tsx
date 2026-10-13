@@ -156,7 +156,7 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       (hardwareFilter === 'esp8266' && is8266(d)) ||
       (hardwareFilter === 'esp32' && !is8266(d));
 
-    const isAvailable = (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected';
+    const isAvailable = (!d.area_id || d.is_discovered === 1) && !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected';
     const matchesAvailability =
       availabilityFilter === 'all' ||
       (availabilityFilter === 'available' && isAvailable) ||
@@ -164,14 +164,14 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
     const matchesRegEffective =
       availabilityFilter === 'available'
-        ? d.registration_status !== 'revoked' && d.registration_status !== 'rejected'
+        ? !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected'
         : matchesReg;
 
     return matchesSearch && matchesStatus && matchesRegEffective && matchesHardware && matchesAvailability;
   });
 
-  const pendingDevices = devices.filter((d) => d.registration_status === 'pending');
-  const availableDevices = devices.filter((d) => (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected');
+  const pendingDevices = devices.filter((d) => d.registration_status === 'pending' && !d.is_simulated);
+  const availableDevices = devices.filter((d) => (!d.area_id || d.is_discovered === 1) && !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected');
   const esp32Count = devices.filter((d) => !is8266(d)).length;
   const esp8266Count = devices.filter((d) => is8266(d)).length;
 

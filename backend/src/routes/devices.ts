@@ -81,6 +81,7 @@ router.get(['/available', '/discover'], (req: Request, res: Response): void => {
     FROM esp_devices d
     LEFT JOIN areas a ON d.area_id = a.id
     WHERE (d.area_id IS NULL OR d.is_discovered = 1)
+      AND d.is_simulated = 0
       AND d.registration_status != 'revoked'
       AND d.registration_status != 'rejected'
     ORDER BY d.is_online DESC, d.last_heartbeat DESC, d.user_name ASC

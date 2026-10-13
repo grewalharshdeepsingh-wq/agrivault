@@ -95,21 +95,27 @@ export function seedDatabase(): void {
   }
 
   // 4. PURGE ANY OLD DEMO/MOCK DATA COMPLETELY
-  // Purge simulated/mock devices
-  db.run(`
-    DELETE FROM esp_devices 
-    WHERE id IN (
-      'ESP32-A7F21', 'ESP32-B8E34', 'ESP32-C9D45', 'ESP32-D1F56', 
-      'ESP32-E2A67', 'ESP32-F3B78', 'ESP8266-C4B12', 'ESP8266-TEST-LIVE', 
-      'ESP32-TEST-LIVE', 'ESP8266-AUTO-DISCOVER-01'
-    )
-  `);
-
-  // Purge simulated/mock areas
-  db.run(`
-    DELETE FROM areas 
-    WHERE id IN ('area-01', 'area-02', 'area-03', 'area-04')
-  `);
+  try {
+    db.run("DELETE FROM sensor_readings WHERE device_id IN (SELECT id FROM esp_devices WHERE is_simulated = 1 OR id LIKE 'AGR-ESP-%' OR id LIKE '%TEST%' OR id LIKE '%STATUS%' OR id LIKE '%DEMO%')");
+    db.run("DELETE FROM sensors WHERE device_id IN (SELECT id FROM esp_devices WHERE is_simulated = 1 OR id LIKE 'AGR-ESP-%' OR id LIKE '%TEST%' OR id LIKE '%STATUS%' OR id LIKE '%DEMO%')");
+    db.run("DELETE FROM relay_devices WHERE device_id IN (SELECT id FROM esp_devices WHERE is_simulated = 1 OR id LIKE 'AGR-ESP-%' OR id LIKE '%TEST%' OR id LIKE '%STATUS%' OR id LIKE '%DEMO%')");
+    db.run("DELETE FROM alerts WHERE device_id IN (SELECT id FROM esp_devices WHERE is_simulated = 1 OR id LIKE 'AGR-ESP-%' OR id LIKE '%TEST%' OR id LIKE '%STATUS%' OR id LIKE '%DEMO%')");
+    db.run("DELETE FROM esp_devices WHERE is_simulated = 1 OR id LIKE 'AGR-ESP-%' OR id LIKE '%TEST%' OR id LIKE '%STATUS%' OR id LIKE '%DEMO%'");
+    db.run(`
+      DELETE FROM esp_devices 
+      WHERE id IN (
+        'ESP32-A7F21', 'ESP32-B8E34', 'ESP32-C9D45', 'ESP32-D1F56', 
+        'ESP32-E2A67', 'ESP32-F3B78', 'ESP8266-C4B12', 'ESP8266-TEST-LIVE', 
+        'ESP32-TEST-LIVE', 'ESP8266-AUTO-DISCOVER-01'
+      )
+    `);
+    db.run(`
+      DELETE FROM areas 
+      WHERE id IN ('area-01', 'area-02', 'area-03', 'area-04')
+    `);
+  } catch {
+    // ignore
+  }
 
   // Clean any dangling demo records
   db.run('DELETE FROM sensors WHERE device_id NOT IN (SELECT id FROM esp_devices)');

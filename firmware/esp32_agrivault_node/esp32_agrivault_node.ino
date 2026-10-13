@@ -28,6 +28,7 @@
  */
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <WebServer.h>
 #include <HTTPClient.h>
 #include <DNSServer.h>
@@ -441,15 +442,26 @@ void transmitTelemetry() {
   json += "}";
 
   String endpoint = sanitizeUrl(backendUrl) + "/api/devices/telemetry";
+  bool isHttps = endpoint.startsWith("https://");
 
   HTTPClient http;
-  WiFiClient client;
-  http.begin(client, endpoint);
+  WiFiClient clientHttp;
+  WiFiClientSecure clientHttps;
+
+  if (isHttps) {
+    clientHttps.setInsecure();
+    clientHttps.setTimeout(8000);
+    http.begin(clientHttps, endpoint);
+  } else {
+    http.begin(clientHttp, endpoint);
+  }
+
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
   if (authToken.length() > 0) {
     http.addHeader("X-Device-Token", authToken);
   }
-  http.setTimeout(5000);
 
   int httpCode = http.POST(json);
 
