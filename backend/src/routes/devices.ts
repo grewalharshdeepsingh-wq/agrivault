@@ -448,121 +448,129 @@ router.post('/discover/simulate', (req: Request, res: Response): void => {
 
 // Common telemetry & discovery ingestion handler
 function processIncomingTelemetry(req: Request, res: Response): void {
-  const payload = req.body || {};
-  const rawDeviceId =
-    payload.deviceId ||
-    payload.id ||
-    payload.node_id ||
-    payload.device_id ||
-    payload.devId ||
-    payload.nodeId ||
-    req.query.deviceId ||
-    req.query.id;
+  try {
+    const payload = req.body || {};
+    const rawDeviceId =
+      payload.deviceId ||
+      payload.id ||
+      payload.node_id ||
+      payload.device_id ||
+      payload.devId ||
+      payload.nodeId ||
+      req.query.deviceId ||
+      req.query.id;
 
-  const mac = payload.macAddress || payload.mac || payload.hardware_id || payload.hardwareId;
+    const mac = payload.macAddress || payload.mac || payload.hardware_id || payload.hardwareId;
 
-  let deviceId: string;
-  if (rawDeviceId && typeof rawDeviceId === 'string' && rawDeviceId.trim().length > 0) {
-    deviceId = rawDeviceId.trim().toUpperCase();
-  } else if (mac && typeof mac === 'string') {
-    const cleanMac = mac.replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
-    deviceId = `ESP32-${cleanMac.slice(-6) || 'NODE'}`;
-  } else {
-    res.status(400).json({
-      error: 'Missing deviceId in telemetry payload. Include "deviceId": "YOUR-ESP-ID" in JSON body.',
-      example: { deviceId: 'ESP32-A1B2C3', temperature: 4.2, humidity: 88.0 }
-    });
-    return;
-  }
-
-  const facilityId = payload.facilityId || 'fac-01';
-  const is8266 = deviceId.includes('8266') || (payload.hardwareType && String(payload.hardwareType).toUpperCase().includes('8266'));
-  const hardwareType = payload.hardwareType || (is8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
-  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || payload.ip || payload.ipAddress || '192.168.1.150';
-  const finalMac = mac || `24:0A:C4:${deviceId.slice(-4)}`;
-  const userName = payload.userName || payload.name || payload.deviceName;
-
-  // Direct internet devices reach the server directly over Wi-Fi HTTP
-  // Only route through wall simulation if explicitly flagged as an inner-gateway simulated packet
-  if (payload.is_simulation && !payload.is_direct_internet) {
-    const routing = gatewayManager.ingestTelemetry({
-      node_id: deviceId,
-      hardware_id: finalMac,
-      timestamp: payload.timestamp || new Date().toISOString(),
-      readings: payload,
-      temperature: payload.temperature ?? payload.temp,
-      humidity: payload.humidity ?? payload.hum,
-      mq3: payload.mq3,
-      mq135: payload.mq135,
-      co2: payload.co2,
-      ammonia: payload.ammonia,
-      ethanol: payload.ethanol,
-      signal_rssi: payload.rssi,
-      battery_voltage: payload.battery,
-      firmware_version: payload.firmwareVersion,
-      is_simulation: payload.is_simulation
-    });
-
-    if (!routing.delivered) {
-      res.status(202).json({
-        status: 'BUFFERED',
-        bufferedTier: routing.bufferedTier,
-        reason: routing.reason,
-        deviceId,
-        timestamp: new Date().toISOString()
+    let deviceId: string;
+    if (rawDeviceId && typeof rawDeviceId === 'string' && rawDeviceId.trim().length > 0) {
+      deviceId = rawDeviceId.trim().toUpperCase();
+    } else if (mac && typeof mac === 'string') {
+      const cleanMac = mac.replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
+      deviceId = `ESP32-${cleanMac.slice(-6) || 'NODE'}`;
+    } else {
+      res.status(400).json({
+        error: 'Missing deviceId in telemetry payload. Include "deviceId": "YOUR-ESP-ID" in JSON body.',
+        example: { deviceId: 'ESP32-A1B2C3', temperature: 4.2, humidity: 88.0 }
       });
       return;
     }
-  }
 
-  // Device connects directly over Wi-Fi / Internet: auto-discover and register as active
-  handleDeviceStatus(facilityId, null, deviceId, {
-    hardwareType,
-    userName,
-    firmwareVersion: payload.firmwareVersion || '1.4.0',
-    ipAddress: payload.ipAddress || payload.ip || clientIp,
-    macAddress: finalMac,
-    rssi: payload.rssi !== undefined ? Number(payload.rssi) : -55,
-    battery: payload.battery !== undefined ? Number(payload.battery) : 3.3,
-    capabilities: payload.capabilities || ['temperature', 'humidity', 'mq3', 'mq135', 'co2']
-  });
+    const facilityId = payload.facilityId || 'fac-01';
+    const is8266 = deviceId.includes('8266') || (payload.hardwareType && String(payload.hardwareType).toUpperCase().includes('8266'));
+    const hardwareType = payload.hardwareType || (is8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || payload.ip || payload.ipAddress || '192.168.1.150';
+    const finalMac = mac || `24:0A:C4:${deviceId.slice(-4)}`;
+    const userName = payload.userName || payload.name || payload.deviceName;
 
-  handleDeviceTelemetry(facilityId, null, deviceId, {
-    ...payload,
-    deviceId,
-    userName,
-    ip: payload.ipAddress || payload.ip || clientIp
-  });
+    // Direct internet devices reach the server directly over Wi-Fi HTTP
+    // Only route through wall simulation if explicitly flagged as an inner-gateway simulated packet
+    if (payload.is_simulation && !payload.is_direct_internet) {
+      const routing = gatewayManager.ingestTelemetry({
+        node_id: deviceId,
+        hardware_id: finalMac,
+        timestamp: payload.timestamp || new Date().toISOString(),
+        readings: payload,
+        temperature: payload.temperature ?? payload.temp,
+        humidity: payload.humidity ?? payload.hum,
+        mq3: payload.mq3,
+        mq135: payload.mq135,
+        co2: payload.co2,
+        ammonia: payload.ammonia,
+        ethanol: payload.ethanol,
+        signal_rssi: payload.rssi,
+        battery_voltage: payload.battery,
+        firmware_version: payload.firmwareVersion,
+        is_simulation: payload.is_simulation
+      });
 
-  // Check for pending remote commands for this device (Architecture A direct link)
-  let pendingCmd: string | undefined = undefined;
-  const devRow = db.get<any>('SELECT reconfigure_wifi_pending FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
-  if (devRow?.reconfigure_wifi_pending === 1) {
-    pendingCmd = 'RECONFIGURE_WIFI';
-    db.run('UPDATE esp_devices SET reconfigure_wifi_pending = 0 WHERE id = ? COLLATE NOCASE', deviceId);
-  }
+      if (!routing.delivered) {
+        res.status(202).json({
+          status: 'BUFFERED',
+          bufferedTier: routing.bufferedTier,
+          reason: routing.reason,
+          deviceId,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+    }
 
-  const pendingRelay = db.get<any>(
-    "SELECT id, state FROM relay_devices WHERE device_id = ? COLLATE NOCASE AND command_status = 'COMMAND_REQUESTED'",
-    deviceId
-  );
-  if (pendingRelay) {
-    pendingCmd = pendingRelay.state === 1 ? 'RELAY_ON' : 'RELAY_OFF';
-    db.run(
-      "UPDATE relay_devices SET command_status = 'COMMAND_ACKNOWLEDGED', last_acknowledged_at = datetime('now') WHERE id = ?",
-      pendingRelay.id
+    // Device connects directly over Wi-Fi / Internet: auto-discover and register as active
+    handleDeviceStatus(facilityId, null, deviceId, {
+      hardwareType,
+      userName,
+      firmwareVersion: payload.firmwareVersion || '1.4.0',
+      ipAddress: payload.ipAddress || payload.ip || clientIp,
+      macAddress: finalMac,
+      rssi: payload.rssi !== undefined ? Number(payload.rssi) : -55,
+      battery: payload.battery !== undefined ? Number(payload.battery) : 3.3,
+      capabilities: payload.capabilities || ['temperature', 'humidity', 'mq3', 'mq135', 'co2']
+    });
+
+    handleDeviceTelemetry(facilityId, null, deviceId, {
+      ...payload,
+      deviceId,
+      userName,
+      ip: payload.ipAddress || payload.ip || clientIp
+    });
+
+    // Check for pending remote commands for this device (Architecture A direct link)
+    let pendingCmd: string | undefined = undefined;
+    const devRow = db.get<any>('SELECT reconfigure_wifi_pending FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
+    if (devRow?.reconfigure_wifi_pending === 1) {
+      pendingCmd = 'RECONFIGURE_WIFI';
+      db.run('UPDATE esp_devices SET reconfigure_wifi_pending = 0 WHERE id = ? COLLATE NOCASE', deviceId);
+    }
+
+    const pendingRelay = db.get<any>(
+      "SELECT id, state FROM relay_devices WHERE device_id = ? COLLATE NOCASE AND command_status = 'COMMAND_REQUESTED'",
+      deviceId
     );
-  }
+    if (pendingRelay) {
+      pendingCmd = pendingRelay.state === 1 ? 'RELAY_ON' : 'RELAY_OFF';
+      db.run(
+        "UPDATE relay_devices SET command_status = 'COMMAND_ACKNOWLEDGED', last_acknowledged_at = datetime('now') WHERE id = ?",
+        pendingRelay.id
+      );
+    }
 
-  res.status(200).json({
-    status: 'ACK',
-    deviceId,
-    command: pendingCmd,
-    path: 'Sensor -> Direct Wi-Fi -> Cloud',
-    discovered: true,
-    availableInFleet: true,
-    receivedAt: new Date().toISOString()
-  });
+    res.status(200).json({
+      status: 'ACK',
+      deviceId,
+      command: pendingCmd,
+      path: 'Sensor -> Direct Wi-Fi -> Cloud',
+      discovered: true,
+      availableInFleet: true,
+      receivedAt: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('[processIncomingTelemetry Error]', err);
+    res.status(500).json({
+      error: 'Telemetry ingestion failed: ' + (err?.message || String(err)),
+      details: err?.stack || String(err)
+    });
+  }
 }
 
 // POST /api/devices/telemetry

@@ -172,6 +172,15 @@ if (!process.env.VERCEL) {
   }
 }
 
+// Global Express Error Handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('[Global Express Error Handler]', err);
+  res.status(500).json({
+    error: err?.message || 'Internal Server Error',
+    stack: err?.stack || String(err)
+  });
+});
+
 async function bootstrap() {
   if (isVercel) {
     // On Vercel serverless functions, database initialization is handled on-demand in middleware
