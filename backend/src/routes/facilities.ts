@@ -46,11 +46,11 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
   const gateway = db.get<Gateway>('SELECT * FROM gateways WHERE facility_id = ? LIMIT 1', facilityId);
 
   // 3. Devices
-  const devices = db.all<ESPDevice>('SELECT * FROM esp_devices WHERE facility_id = ?', facilityId);
-  const connectedESPs = devices.filter(d => d.is_online === 1 && d.is_discovered === 0).length;
-  const offlineESPs = devices.filter(d => d.is_online === 0 && d.is_discovered === 0).length;
-  const pendingDiscovery = devices.filter(d => d.is_discovered === 1).length;
+  const connectedESPs = devices.filter(d => d.is_online === 1).length;
+  const offlineESPs = devices.filter(d => d.is_online === 0).length;
+  const pendingDiscovery = devices.filter(d => d.registration_status === 'pending').length;
   const unassignedESPs = devices.filter(d => !d.area_id).length;
+  const availableESPs = devices.filter(d => !d.area_id && d.registration_status !== 'revoked').length;
   const esp32Count = devices.filter(d => (d.hardware_type || '').includes('ESP32') || d.id.includes('ESP32')).length;
   const esp8266Count = devices.filter(d => (d.hardware_type || '').includes('ESP8266') || d.id.includes('ESP8266')).length;
 
@@ -165,6 +165,7 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
     offlineESPs,
     pendingDiscovery,
     unassignedESPs,
+    availableESPs,
     esp32Count,
     esp8266Count,
     activeAlertsCount: activeAlerts.length,

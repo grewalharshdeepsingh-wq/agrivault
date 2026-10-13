@@ -101,6 +101,7 @@ export const api = {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return request<any[]>(`/devices${qs}`);
   },
+  getAvailableDevices: () => request<any[]>('/devices/available'),
   getDevice: (id: string) => request<any>(`/devices/${id}`),
   updateDevice: async (id: string, data: any) => {
     if (data.areaId) {
@@ -248,5 +249,8 @@ export const api = {
   toggleNetworkFailure: (failureType: string, isFailed: boolean) =>
     request<any>('/simulation/network-failure', { method: 'POST', body: JSON.stringify({ failureType, isFailed }) }),
   toggleSimulatedNode: (deviceId: string, offline: boolean) =>
-    request<any>('/simulation/node/toggle', { method: 'POST', body: JSON.stringify({ deviceId, offline }) })
+    request<any>('/simulation/node/toggle', { method: 'POST', body: JSON.stringify({ deviceId, offline }) }),
+
+  // Network & System Info
+  getNetworkInfo: () => request<any>('/system/network-info')
 };

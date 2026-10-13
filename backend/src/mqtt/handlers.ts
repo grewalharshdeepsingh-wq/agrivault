@@ -26,6 +26,15 @@ export function parseTopic(topic: string): ParsedTopic | null {
       action: parts[4] as any
     };
   }
+  // Flexible Direct: agrivault / device / {devId} / {action}
+  if (parts.length === 4 && parts[0] === 'agrivault' && parts[1] === 'device') {
+    return {
+      facilityId: 'fac-01',
+      gatewayId: undefined,
+      deviceId: parts[2],
+      action: parts[3] as any
+    };
+  }
   // Legacy Gateway: agrivault / {facId} / gateway / {gwId} / device / {devId} / {action}
   if (parts.length === 7 && parts[0] === 'agrivault' && parts[2] === 'gateway' && parts[4] === 'device') {
     return {
@@ -69,6 +78,7 @@ export function handleDeviceStatus(
   deviceId: string,
   payload: {
     hardwareType?: string;
+    userName?: string;
     firmwareVersion?: string;
     ipAddress?: string;
     macAddress?: string;
@@ -81,18 +91,23 @@ export function handleDeviceStatus(
   const cleanId = deviceId.trim().toUpperCase();
   let dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
 
+  // Validate facilityId against database
+  const fac = db.get('SELECT id FROM facilities WHERE id = ?', facilityId);
+  const targetFacilityId = fac ? facilityId : 'fac-01';
+
   if (!dev) {
     // 1. AUTO-DISCOVER NEW DEVICE
     const isEsp8266 = cleanId.includes('8266') || (payload.hardwareType && payload.hardwareType.toUpperCase().includes('8266'));
     const hwType = payload.hardwareType || (isEsp8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
     const mac = payload.macAddress || (isEsp8266 ? `5C:CF:7F:00:00:01` : `24:0A:C4:00:00:01`);
-    const defaultName = `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${cleanId}`;
+    const defaultName = payload.userName || `${isEsp8266 ? 'ESP8266' : 'ESP32'} Node: ${cleanId}`;
     const validGw = gatewayId ? db.get('SELECT id FROM gateways WHERE id = ?', gatewayId) : null;
-    const finalGatewayId = validGw ? gatewayId : 'GW-INNER-01';
+    const finalGatewayId = validGw ? gatewayId : null;
 
     const assignedAreaId = globalMeshAssignments.get(cleanId) || null;
     const isDiscovered = assignedAreaId ? 0 : 1;
-    const regStatus = assignedAreaId ? 'active' : 'pending';
+    // When an ESP is configured and connects over the Internet, it is an active available node!
+    const regStatus = 'active';
     const isSim = (payload as any).is_simulation ? 1 : 0;
 
     db.run(
@@ -107,11 +122,11 @@ export function handleDeviceStatus(
       cleanId,
       'SENSOR_NODE',
       regStatus,
-      facilityId,
+      targetFacilityId,
       assignedAreaId,
       finalGatewayId,
-      'GW-INNER-01',
-      'ESP-NOW',
+      finalGatewayId,
+      'Wi-Fi (Direct Internet)',
       defaultName,
       hwType,
       payload.firmwareVersion || '1.4.0',
@@ -119,8 +134,8 @@ export function handleDeviceStatus(
       mac,
       1,
       now,
-      payload.rssi || -55,
-      payload.battery || 3.3,
+      payload.rssi !== undefined ? payload.rssi : -55,
+      payload.battery !== undefined ? payload.battery : 3.3,
       1,
       isDiscovered,
       isSim,
@@ -158,18 +173,35 @@ export function handleDeviceStatus(
     broadcast('device_discovered', {
       device: dev,
       capabilities: caps,
-      message: `New ${isEsp8266 ? 'ESP8266' : 'ESP32'} node ${cleanId} connected directly over Internet!`
+      message: `New ${isEsp8266 ? 'ESP8266' : 'ESP32'} node ${cleanId} connected directly over Internet! Available in fleet.`
     });
-    console.log(`[Discovery] Auto-registered new ${isEsp8266 ? 'ESP8266' : 'ESP32'} sensor node: ${cleanId} (Direct Internet)`);
+    broadcast('device_updated', dev);
+    console.log(`[Discovery] Auto-registered new ${isEsp8266 ? 'ESP8266' : 'ESP32'} sensor node: ${cleanId} (Direct Internet - Available in Fleet)`);
   } else {
     // Existing device heartbeat update using canonical ID
     recordDeviceHeartbeat(dev.id, payload.rssi, payload.ipAddress);
+    db.run(
+      `UPDATE esp_devices SET
+        is_online = 1,
+        last_heartbeat = ?,
+        ip_address = COALESCE(?, ip_address),
+        signal_rssi = COALESCE(?, signal_rssi),
+        user_name = COALESCE(?, user_name),
+        registration_status = CASE WHEN registration_status = 'pending' THEN 'active' ELSE registration_status END,
+        connection_protocol = COALESCE(connection_protocol, 'Wi-Fi (Direct Internet)')
+      WHERE id = ? COLLATE NOCASE`,
+      now, payload.ipAddress || null, payload.rssi !== undefined ? payload.rssi : null, payload.userName || null, dev.id
+    );
+
     const assignedAreaId = globalMeshAssignments.get(cleanId);
     if (assignedAreaId && dev.area_id !== assignedAreaId) {
       db.run('UPDATE esp_devices SET area_id = ?, is_discovered = 0 WHERE id = ? COLLATE NOCASE', assignedAreaId, dev.id);
       db.run('UPDATE sensors SET area_id = ? WHERE device_id = ? COLLATE NOCASE', assignedAreaId, dev.id);
       db.run('UPDATE relay_devices SET area_id = ? WHERE device_id = ? COLLATE NOCASE', assignedAreaId, dev.id);
     }
+
+    const updatedDev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', dev.id);
+    broadcast('device_updated', updatedDev);
   }
 }
 
@@ -185,7 +217,23 @@ export function handleDeviceTelemetry(
 ): void {
   const now = new Date().toISOString();
   const cleanId = deviceId.trim().toUpperCase();
-  const dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
+  let dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
+
+  // If device doesn't exist yet, auto-register it now via handleDeviceStatus!
+  if (!dev) {
+    handleDeviceStatus(facilityId, gatewayId, cleanId, {
+      hardwareType: payload.hardwareType,
+      userName: payload.userName || payload.name,
+      firmwareVersion: payload.firmwareVersion,
+      ipAddress: payload.ip || payload.ipAddress,
+      macAddress: payload.macAddress || payload.hardware_id,
+      rssi: payload.rssi,
+      battery: payload.battery,
+      capabilities: payload.capabilities
+    });
+    dev = db.get<ESPDevice>('SELECT * FROM esp_devices WHERE id = ? COLLATE NOCASE', cleanId);
+  }
+
   const canonicalId = dev ? dev.id : cleanId;
 
   recordDeviceHeartbeat(canonicalId, payload.rssi, payload.ip);

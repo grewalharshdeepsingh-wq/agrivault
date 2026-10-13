@@ -43,6 +43,7 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
   const [isScanning, setIsScanning] = useState(false);
   const [scanningType, setScanningType] = useState<'ESP32' | 'ESP8266' | null>(null);
   const [showSetupGuide, setShowSetupGuide] = useState(false);
+  const [networkInfo, setNetworkInfo] = useState<any>(null);
 
   // Configuration Modal State
   const [configuringDevice, setConfiguringDevice] = useState<ESPDevice | null>(null);
@@ -155,17 +156,22 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
       (hardwareFilter === 'esp8266' && is8266(d)) ||
       (hardwareFilter === 'esp32' && !is8266(d));
 
-    const isAvailable = !d.area_id;
+    const isAvailable = (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected';
     const matchesAvailability =
       availabilityFilter === 'all' ||
       (availabilityFilter === 'available' && isAvailable) ||
       (availabilityFilter === 'assigned' && !isAvailable);
 
-    return matchesSearch && matchesStatus && matchesReg && matchesHardware && matchesAvailability;
+    const matchesRegEffective =
+      availabilityFilter === 'available'
+        ? d.registration_status !== 'revoked' && d.registration_status !== 'rejected'
+        : matchesReg;
+
+    return matchesSearch && matchesStatus && matchesRegEffective && matchesHardware && matchesAvailability;
   });
 
   const pendingDevices = devices.filter((d) => d.registration_status === 'pending');
-  const availableDevices = devices.filter((d) => !d.area_id && d.registration_status !== 'pending');
+  const availableDevices = devices.filter((d) => (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected');
   const esp32Count = devices.filter((d) => !is8266(d)).length;
   const esp8266Count = devices.filter((d) => is8266(d)).length;
 
@@ -189,7 +195,10 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
         <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setShowSetupGuide(true)}
+            onClick={() => {
+              setShowSetupGuide(true);
+              api.getNetworkInfo().then(setNetworkInfo).catch(() => {});
+            }}
             className="px-3 py-2 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-semibold flex items-center gap-1.5 border border-vault-700 transition"
           >
             <HelpCircle className="w-3.5 h-3.5 text-agri-400" />
@@ -306,7 +315,10 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
             </div>
 
             <button
-              onClick={() => setAvailabilityFilter('available')}
+              onClick={() => {
+                setAvailabilityFilter('available');
+                setRegFilter('all');
+              }}
               className="text-xs font-semibold text-indigo-300 hover:text-white flex items-center gap-1 transition"
             >
               <span>View all available ({availableDevices.length})</span>
@@ -426,7 +438,10 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
             {(['all', 'available', 'assigned'] as const).map((av) => (
               <button
                 key={av}
-                onClick={() => setAvailabilityFilter(av)}
+                onClick={() => {
+                  setAvailabilityFilter(av);
+                  if (av === 'available') setRegFilter('all');
+                }}
                 className={`px-2 py-0.5 rounded text-[11px] font-semibold capitalize transition ${
                   availabilityFilter === av
                     ? av === 'available'
@@ -659,6 +674,16 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
                               <Unlink className="w-3.5 h-3.5" />
                             </button>
                           )}
+                          {!d.area_id && !isRevoked && (
+                            <button
+                              onClick={() => setConfiguringDevice(d)}
+                              className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold flex items-center gap-1 transition shadow-sm"
+                              title="Assign this available ESP node to a room"
+                            >
+                              <Layers className="w-3.5 h-3.5" />
+                              <span>Assign Room</span>
+                            </button>
+                          )}
                           <button
                             onClick={() => setConfiguringDevice(d)}
                             className="p-1.5 rounded bg-vault-800 hover:bg-vault-700 text-slate-200 transition"
@@ -750,19 +775,29 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
                   <li>On your phone or laptop, connect to the Wi-Fi network: <code className="bg-vault-950 px-1.5 py-0.5 rounded text-agri-300 font-mono">AgriVault-Node-XXXX</code>.</li>
                   <li>Open your browser to <code className="bg-vault-950 px-1.5 py-0.5 rounded text-agri-300 font-mono">http://192.168.4.1</code>.</li>
                   <li>Enter your normal Wi-Fi network credentials and your AgriVault Server URL:
-                    <div className="mt-1 p-2 bg-vault-950 rounded font-mono text-[11px] text-agri-300">
-                      {window.location.origin}
+                    <div className="mt-1 p-2 bg-vault-950 rounded font-mono text-[11px] text-agri-300 break-all select-all">
+                      {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                        ? (networkInfo?.localServerUrl || `http://192.168.2.168:4000`)
+                        : window.location.origin}
                     </div>
+                    {(window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && (
+                      <p className="mt-1 text-[11px] text-amber-300 bg-amber-950/40 border border-amber-500/30 p-2 rounded">
+                        ⚠️ <strong>Wi-Fi Setup Tip:</strong> Because the ESP connects over your Wi-Fi router, do <strong>NOT</strong> enter &quot;localhost&quot;. Use your computer's local Wi-Fi IP address shown above (e.g. <code>{networkInfo?.localServerUrl || 'http://192.168.2.168:4000'}</code>).
+                      </p>
+                    )}
                   </li>
-                  <li>Click <strong>Save and Connect</strong>. The node reboots, connects to the Internet, and automatically appears here!</li>
+                  <li>Click <strong>Save and Connect</strong>. The node reboots, connects to the Internet, and automatically appears here in Available ESP list!</li>
                 </ol>
               </div>
 
               <div>
                 <h4 className="font-bold text-white mb-1.5 text-sm">Method 2: Direct HTTP REST Ingestion</h4>
                 <p className="text-vault-400 mb-2">Send periodic HTTP POST telemetry payloads to:</p>
-                <div className="bg-vault-950 p-2.5 rounded-lg border border-vault-800 font-mono text-[11px] text-slate-200">
-                  <span className="text-emerald-400 font-bold">POST</span> {window.location.origin}/api/devices/telemetry
+                <div className="bg-vault-950 p-2.5 rounded-lg border border-vault-800 font-mono text-[11px] text-slate-200 break-all select-all">
+                  <span className="text-emerald-400 font-bold">POST</span>{' '}
+                  {window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+                    ? (networkInfo?.telemetryEndpoint || `http://192.168.2.168:4000/api/devices/telemetry`)
+                    : `${window.location.origin}/api/devices/telemetry`}
                 </div>
                 <div className="bg-vault-950 p-2.5 rounded-lg border border-vault-800 font-mono text-[10px] text-vault-400 mt-2">
 {`{

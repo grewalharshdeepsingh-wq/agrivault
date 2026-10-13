@@ -75,7 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [configuringDevice, setConfiguringDevice] = useState<ESPDevice | null>(null);
   const [nodeSearch, setNodeSearch] = useState('');
   const [nodeZoneFilter, setNodeZoneFilter] = useState('all');
-  const [nodeStatusFilter, setNodeStatusFilter] = useState<'all' | 'online' | 'offline' | 'pending'>('all');
+  const [nodeStatusFilter, setNodeStatusFilter] = useState<'all' | 'online' | 'offline' | 'pending' | 'available'>('all');
 
   // Load all available ESP devices for assignment
   const fetchDevices = async () => {
@@ -433,62 +433,100 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* New Device Detected / Pending Registration Banner */}
-      {allDevices.filter(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id)).length > 0 && (
-        <div className="bg-gradient-to-r from-amber-950/70 via-vault-900 to-amber-950/70 border border-amber-500/60 rounded-2xl p-4 shadow-xl">
+      {/* Available ESP Nodes Fleet Banner */}
+      {allDevices.filter(d => (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected').length > 0 && (
+        <div className="bg-gradient-to-r from-indigo-950/70 via-vault-900 to-indigo-950/70 border border-indigo-500/60 rounded-2xl p-4 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
                 <Sparkles className="w-5 h-5 animate-pulse" />
               </div>
               <div>
                 <p className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>New Device Detected ({allDevices.filter(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id)).length} Pending Approval)</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500 text-black">
-                    PENDING REGISTRATION
+                  <span>Available ESP Nodes Detected In Fleet</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500 text-white">
+                    {allDevices.filter(d => (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected').length} READY
                   </span>
                 </p>
-                <p className="text-xs text-amber-200/90 mt-0.5">
-                  Microcontroller detected via Inner Gateway (ESP-NOW). Secure authorization requires assigning device ID, name, and zone before activating telemetry.
+                <p className="text-xs text-indigo-200/90 mt-0.5">
+                  Microcontrollers connected over Wi-Fi / Internet and transmitting live telemetry. Ready to assign to a storage room or monitored zone.
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => {
-                const firstPending = allDevices.find(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id));
-                if (firstPending) setConfiguringDevice(firstPending);
-              }}
-              className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-black font-extrabold text-xs shadow-md transition shrink-0"
-            >
-              Configure & Approve
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={openCreateModal}
+                className="px-3.5 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Create Room with Node</span>
+              </button>
+              <button
+                onClick={onNavigateToDevices}
+                className="px-3 py-2 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-semibold border border-vault-700 transition"
+              >
+                View Fleet ({allDevices.length})
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap gap-2.5 mt-3 pt-3 border-t border-amber-500/20">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3 pt-3 border-t border-indigo-500/20">
             {allDevices
-              .filter(d => d.registration_status === 'pending' || (d.is_discovered === 1 && !d.area_id))
-              .map((d) => (
-                <div
-                  key={d.id}
-                  className="bg-vault-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs flex items-center justify-between gap-3 shadow"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
-                      {d.connection_protocol || 'ESP-NOW'}
-                    </span>
-                    <div>
-                      <span className="font-bold text-white block">{d.device_code || d.id}</span>
-                      <span className="text-[10px] font-mono text-vault-400">MAC: {d.hardware_id || d.mac_address || '24:0A:C4:XX:XX'}</span>
+              .filter(d => (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked' && d.registration_status !== 'rejected')
+              .map((d) => {
+                const is8266Node = (d.hardware_type || '').includes('8266') || d.id.includes('8266');
+                const tempVal = d.sensors?.find((s: any) => s.sensor_type === 'temperature')?.calibrated_reading;
+                const humVal = d.sensors?.find((s: any) => s.sensor_type === 'humidity')?.calibrated_reading;
+
+                return (
+                  <div
+                    key={d.id}
+                    className="bg-vault-950 border border-indigo-500/40 rounded-xl p-3 text-xs flex items-center justify-between gap-3 shadow hover:border-indigo-400 transition"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase shrink-0 ${
+                          is8266Node ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30' : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                        }`}>
+                          {is8266Node ? 'ESP8266' : 'ESP32'}
+                        </span>
+                        <span className="font-bold text-white truncate block">{d.user_name || d.device_code || d.id}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] font-mono text-vault-400">
+                        <span>ID: {d.id}</span>
+                        {d.ip_address && <span>• IP: {d.ip_address}</span>}
+                        {tempVal !== undefined && tempVal !== null && (
+                          <span className="text-emerald-400 font-semibold">• {tempVal}°C</span>
+                        )}
+                        {humVal !== undefined && humVal !== null && (
+                          <span className="text-sky-400 font-semibold">• {humVal}%</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => {
+                          setSelectedDeviceIds([d.id]);
+                          setShowAddRoomModal(true);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow transition flex items-center gap-1"
+                        title="Pair this ESP to a new room"
+                      >
+                        <Layers className="w-3.5 h-3.5" />
+                        <span>Pair</span>
+                      </button>
+                      <button
+                        onClick={() => setConfiguringDevice(d)}
+                        className="p-1.5 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-300 text-xs transition"
+                        title="Configure node parameters"
+                      >
+                        <Settings2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setConfiguringDevice(d)}
-                    className="px-2.5 py-1 rounded bg-agri-600 hover:bg-agri-500 text-white font-bold text-xs shadow transition flex items-center gap-1"
-                  >
-                    <span>Configure</span>
-                  </button>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </div>
       )}
@@ -600,6 +638,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 className="bg-vault-950 border border-vault-800 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-agri-500"
               >
                 <option value="all">All Statuses</option>
+                <option value="available">Available in Fleet (Unassigned)</option>
                 <option value="online">Online Only</option>
                 <option value="offline">Offline Only</option>
                 <option value="pending">Pending Approval</option>
@@ -636,6 +675,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     const matchesStatus =
                       nodeStatusFilter === 'all' ||
+                      (nodeStatusFilter === 'available' && (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked') ||
                       (nodeStatusFilter === 'online' && d.is_online === 1) ||
                       (nodeStatusFilter === 'offline' && d.is_online === 0) ||
                       (nodeStatusFilter === 'pending' && d.registration_status === 'pending');
@@ -809,40 +849,62 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {allDevices.length === 0 ? (
                     <p className="text-xs text-vault-500 p-2">No ESP devices detected yet. Turn on an ESP module to auto-discover.</p>
                   ) : (
-                    allDevices.map((dev) => {
-                      const isSelected = selectedDeviceIds.includes(dev.id);
-                      return (
-                        <div
-                          key={dev.id}
-                          onClick={() => toggleDeviceSelection(dev.id)}
-                          className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border text-xs transition ${
-                            isSelected
-                              ? 'bg-agri-950/40 border-agri-500/50 text-agri-200'
-                              : 'bg-vault-900/60 border-vault-800 text-slate-300 hover:bg-vault-800'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}}
-                              className="rounded border-vault-700 text-agri-500 focus:ring-0"
-                            />
-                            <div>
-                              <p className="font-semibold text-white">{dev.user_name || dev.id}</p>
-                              <span className="text-[10px] text-vault-400 font-mono">
-                                {dev.id} • {dev.hardware_type || 'ESP'} • {dev.ip_address}
-                              </span>
+                    [...allDevices]
+                      .sort((a, b) => {
+                        const aAvail = !a.area_id ? 1 : 0;
+                        const bAvail = !b.area_id ? 1 : 0;
+                        if (aAvail !== bAvail) return bAvail - aAvail;
+                        return (b.is_online || 0) - (a.is_online || 0);
+                      })
+                      .map((dev) => {
+                        const isSelected = selectedDeviceIds.includes(dev.id);
+                        const isAvailableDev = !dev.area_id;
+
+                        return (
+                          <div
+                            key={dev.id}
+                            onClick={() => toggleDeviceSelection(dev.id)}
+                            className={`flex items-center justify-between p-2 rounded-lg cursor-pointer border text-xs transition ${
+                              isSelected
+                                ? 'bg-agri-950/40 border-agri-500/50 text-agri-200 ring-1 ring-agri-500/30'
+                                : isAvailableDev
+                                ? 'bg-indigo-950/20 border-indigo-500/40 text-slate-200 hover:bg-indigo-900/30'
+                                : 'bg-vault-900/60 border-vault-800 text-slate-300 hover:bg-vault-800'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={() => {}}
+                                className="rounded border-vault-700 text-agri-500 focus:ring-0"
+                              />
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <p className="font-semibold text-white">{dev.user_name || dev.id}</p>
+                                  {isAvailableDev ? (
+                                    <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-indigo-500/30 text-indigo-300 border border-indigo-500/40">
+                                      AVAILABLE
+                                    </span>
+                                  ) : (
+                                    <span className="px-1 py-0.2 rounded text-[9px] font-mono bg-vault-800 text-vault-400">
+                                      {dev.area_name || 'Assigned'}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-[10px] text-vault-400 font-mono">
+                                  {dev.id} • {dev.hardware_type || 'ESP'} • {dev.ip_address || 'Wi-Fi'}
+                                </span>
+                              </div>
                             </div>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
+                              dev.is_online ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                            }`}>
+                              {dev.is_online ? 'Online' : 'Offline'}
+                            </span>
                           </div>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                            dev.is_online ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
-                          }`}>
-                            {dev.is_online ? 'Online' : 'Offline'}
-                          </span>
-                        </div>
-                      );
-                    })
+                        );
+                      })
                   )}
                 </div>
               </div>

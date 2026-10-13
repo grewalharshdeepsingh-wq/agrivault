@@ -120,12 +120,30 @@ router.post('/mesh-sync', (req: Request, res: Response): void => {
   }
 });
 
-// GET /api/system/mesh-status
-router.get('/mesh-status', (req: Request, res: Response): void => {
+// GET /api/system/network-info
+// Returns host network IP addresses to assist ESP captive portal configuration
+router.get('/network-info', (req: Request, res: Response): void => {
+  const nets = os.networkInterfaces();
+  const ips: string[] = [];
+
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name] || []) {
+      if (net.family === 'IPv4' && !net.internal) {
+        ips.push(net.address);
+      }
+    }
+  }
+
+  const primaryIp = ips[0] || '127.0.0.1';
+  const port = process.env.PORT || '4000';
+
   res.json({
-    status: 'ACTIVE',
-    activeRooms: Array.from(globalMeshRooms.values()),
-    activeAssignments: Object.fromEntries(globalMeshAssignments.entries())
+    primaryIp,
+    port,
+    availableIps: ips,
+    localServerUrl: `http://${primaryIp}:${port}`,
+    telemetryEndpoint: `http://${primaryIp}:${port}/api/devices/telemetry`,
+    mqttBroker: `mqtt://${primaryIp}:1883`
   });
 });
 

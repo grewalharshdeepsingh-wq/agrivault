@@ -88,7 +88,10 @@ String sanitizeUrl(String url) {
   while (url.endsWith("/")) url.remove(url.length() - 1);
   if (url.endsWith("/api/devices/telemetry")) url.remove(url.length() - 22);
   else if (url.endsWith("/devices/telemetry")) url.remove(url.length() - 18);
+  else if (url.endsWith("/api/devices")) url.remove(url.length() - 12);
+  else if (url.endsWith("/devices")) url.remove(url.length() - 8);
   else if (url.endsWith("/api")) url.remove(url.length() - 4);
+  while (url.endsWith("/")) url.remove(url.length() - 1);
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
     url = "http://" + url;
   }
@@ -218,7 +221,7 @@ void handlePortalRoot() {
     "<input type=\"text\" name=\"backend\" id=\"backendUrl\" value=\"");
   html += backendUrl;
   html += F("\" required>"
-    "<div class=\"hint\">Default local port: <code>http://192.168.1.100:4000</code> or your cloud domain.</div>"
+    "<div class=\"hint\">Host machine LAN IP e.g. <code>http://192.168.2.168:4000</code> or your cloud server domain. (Do not enter localhost).</div>"
     "<label>Device Display Name / Zone Label:</label>"
     "<input type=\"text\" name=\"name\" value=\"");
   html += deviceName;

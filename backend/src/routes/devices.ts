@@ -53,7 +53,7 @@ router.get('/', (req: Request, res: Response): void => {
     params.push(isDiscovered === 'true' || isDiscovered === '1' ? 1 : 0);
   }
 
-  sql += ' ORDER BY CASE WHEN d.registration_status = \'pending\' THEN 0 ELSE 1 END, d.is_discovered DESC, d.user_name ASC';
+  sql += ' ORDER BY d.is_online DESC, d.last_heartbeat DESC, d.user_name ASC';
 
   const devices = db.all<any>(sql, ...params);
 
@@ -64,12 +64,39 @@ router.get('/', (req: Request, res: Response): void => {
       ...d,
       hardware_id: d.hardware_id || d.mac_address,
       device_code: d.device_code || d.id,
-      registration_status: d.registration_status || (d.is_discovered === 1 && !d.area_id ? 'pending' : 'active'),
+      registration_status: d.registration_status || 'active',
       is_simulated: d.is_simulated || 0,
       sensors
     };
   });
 
+  res.json(enriched);
+});
+
+// GET /api/devices/available
+// Returns all currently unassigned ESPs detected in fleet (ready to be paired or assigned to a room)
+router.get(['/available', '/discover'], (req: Request, res: Response): void => {
+  const sql = `
+    SELECT d.*, a.name as area_name
+    FROM esp_devices d
+    LEFT JOIN areas a ON d.area_id = a.id
+    WHERE (d.area_id IS NULL OR d.is_discovered = 1)
+      AND d.registration_status != 'revoked'
+      AND d.registration_status != 'rejected'
+    ORDER BY d.is_online DESC, d.last_heartbeat DESC, d.user_name ASC
+  `;
+  const available = db.all<any>(sql);
+  const enriched = available.map(d => {
+    const sensors = db.all<Sensor>('SELECT * FROM sensors WHERE device_id = ?', d.id);
+    return {
+      ...d,
+      hardware_id: d.hardware_id || d.mac_address,
+      device_code: d.device_code || d.id,
+      registration_status: d.registration_status || 'active',
+      is_available: 1,
+      sensors
+    };
+  });
   res.json(enriched);
 });
 
@@ -101,7 +128,7 @@ router.get('/:id', (req: Request, res: Response): void => {
     ...dev,
     hardware_id: dev.hardware_id || dev.mac_address,
     device_code: dev.device_code || dev.id,
-    registration_status: dev.registration_status || (dev.is_discovered === 1 && !dev.area_id ? 'pending' : 'active'),
+    registration_status: dev.registration_status || 'active',
     sensors,
     activeAlerts,
     recentReadings
@@ -419,81 +446,104 @@ router.post('/discover/simulate', (req: Request, res: Response): void => {
   });
 });
 
-// POST /api/devices/telemetry
-// Primary telemetry ingest route: routed through gatewayManager for offline buffering resilience
-router.post('/telemetry', (req: Request, res: Response): void => {
+// Common telemetry & discovery ingestion handler
+function processIncomingTelemetry(req: Request, res: Response): void {
   const payload = req.body || {};
-  const rawDeviceId = payload.deviceId || payload.id || req.query.deviceId;
+  const rawDeviceId =
+    payload.deviceId ||
+    payload.id ||
+    payload.node_id ||
+    payload.device_id ||
+    payload.devId ||
+    payload.nodeId ||
+    req.query.deviceId ||
+    req.query.id;
 
-  if (!rawDeviceId || typeof rawDeviceId !== 'string') {
-    res.status(400).json({ error: 'Missing or invalid "deviceId" in telemetry payload' });
-    return;
-  }
+  const mac = payload.macAddress || payload.mac || payload.hardware_id || payload.hardwareId;
 
-  const deviceId = rawDeviceId.trim().toUpperCase();
-  const facilityId = payload.facilityId || 'fac-01';
-  const hardwareType = payload.hardwareType || 'ESP32-DevKit-V1';
-  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || payload.ip || '192.168.1.150';
-  const mac = payload.macAddress || payload.hardware_id || `24:0A:C4:${deviceId.slice(-4)}`;
-
-  // Multi-tier architecture check & buffering
-  const routing = gatewayManager.ingestTelemetry({
-    node_id: deviceId,
-    hardware_id: mac,
-    timestamp: payload.timestamp || new Date().toISOString(),
-    readings: payload,
-    temperature: payload.temperature,
-    humidity: payload.humidity,
-    mq3: payload.mq3,
-    mq135: payload.mq135,
-    co2: payload.co2,
-    ammonia: payload.ammonia,
-    ethanol: payload.ethanol,
-    signal_rssi: payload.rssi,
-    battery_voltage: payload.battery,
-    firmware_version: payload.firmwareVersion,
-    is_simulation: payload.is_simulation
-  });
-
-  if (!routing.delivered) {
-    // Reading was safely buffered in Inner or Outer Gateway
-    res.status(202).json({
-      status: 'BUFFERED',
-      bufferedTier: routing.bufferedTier,
-      reason: routing.reason,
-      deviceId,
-      timestamp: new Date().toISOString()
+  let deviceId: string;
+  if (rawDeviceId && typeof rawDeviceId === 'string' && rawDeviceId.trim().length > 0) {
+    deviceId = rawDeviceId.trim().toUpperCase();
+  } else if (mac && typeof mac === 'string') {
+    const cleanMac = mac.replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
+    deviceId = `ESP32-${cleanMac.slice(-6) || 'NODE'}`;
+  } else {
+    res.status(400).json({
+      error: 'Missing deviceId in telemetry payload. Include "deviceId": "YOUR-ESP-ID" in JSON body.',
+      example: { deviceId: 'ESP32-A1B2C3', temperature: 4.2, humidity: 88.0 }
     });
     return;
   }
 
-  // Gateway link & Internet are open: ingest directly
-  handleDeviceStatus(facilityId, gatewayManager.innerGatewayId, deviceId, {
+  const facilityId = payload.facilityId || 'fac-01';
+  const is8266 = deviceId.includes('8266') || (payload.hardwareType && String(payload.hardwareType).toUpperCase().includes('8266'));
+  const hardwareType = payload.hardwareType || (is8266 ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1');
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || payload.ip || payload.ipAddress || '192.168.1.150';
+  const finalMac = mac || `24:0A:C4:${deviceId.slice(-4)}`;
+  const userName = payload.userName || payload.name || payload.deviceName;
+
+  // Direct internet devices reach the server directly over Wi-Fi HTTP
+  // Only route through wall simulation if explicitly flagged as an inner-gateway simulated packet
+  if (payload.is_simulation && !payload.is_direct_internet) {
+    const routing = gatewayManager.ingestTelemetry({
+      node_id: deviceId,
+      hardware_id: finalMac,
+      timestamp: payload.timestamp || new Date().toISOString(),
+      readings: payload,
+      temperature: payload.temperature ?? payload.temp,
+      humidity: payload.humidity ?? payload.hum,
+      mq3: payload.mq3,
+      mq135: payload.mq135,
+      co2: payload.co2,
+      ammonia: payload.ammonia,
+      ethanol: payload.ethanol,
+      signal_rssi: payload.rssi,
+      battery_voltage: payload.battery,
+      firmware_version: payload.firmwareVersion,
+      is_simulation: payload.is_simulation
+    });
+
+    if (!routing.delivered) {
+      res.status(202).json({
+        status: 'BUFFERED',
+        bufferedTier: routing.bufferedTier,
+        reason: routing.reason,
+        deviceId,
+        timestamp: new Date().toISOString()
+      });
+      return;
+    }
+  }
+
+  // Device connects directly over Wi-Fi / Internet: auto-discover and register as active
+  handleDeviceStatus(facilityId, null, deviceId, {
     hardwareType,
+    userName,
     firmwareVersion: payload.firmwareVersion || '1.4.0',
-    ipAddress: payload.ipAddress || clientIp,
-    macAddress: mac,
-    rssi: payload.rssi !== undefined ? Number(payload.rssi) : -58,
+    ipAddress: payload.ipAddress || payload.ip || clientIp,
+    macAddress: finalMac,
+    rssi: payload.rssi !== undefined ? Number(payload.rssi) : -55,
     battery: payload.battery !== undefined ? Number(payload.battery) : 3.3,
     capabilities: payload.capabilities || ['temperature', 'humidity', 'mq3', 'mq135', 'co2']
   });
 
-  handleDeviceTelemetry(facilityId, gatewayManager.innerGatewayId, deviceId, {
+  handleDeviceTelemetry(facilityId, null, deviceId, {
     ...payload,
     deviceId,
-    ip: payload.ipAddress || clientIp
+    userName,
+    ip: payload.ipAddress || payload.ip || clientIp
   });
 
   // Check for pending remote commands for this device (Architecture A direct link)
   let pendingCmd: string | undefined = undefined;
-  const devRow = db.get<any>('SELECT reconfigure_wifi_pending FROM esp_devices WHERE id = ?', deviceId);
+  const devRow = db.get<any>('SELECT reconfigure_wifi_pending FROM esp_devices WHERE id = ? COLLATE NOCASE', deviceId);
   if (devRow?.reconfigure_wifi_pending === 1) {
     pendingCmd = 'RECONFIGURE_WIFI';
-    db.run('UPDATE esp_devices SET reconfigure_wifi_pending = 0 WHERE id = ?', deviceId);
+    db.run('UPDATE esp_devices SET reconfigure_wifi_pending = 0 WHERE id = ? COLLATE NOCASE', deviceId);
   }
 
   const pendingRelay = db.get<any>(
-    "SELECT id, state FROM relay_devices WHERE device_id = ? AND command_status = 'COMMAND_REQUESTED'",
+    "SELECT id, state FROM relay_devices WHERE device_id = ? COLLATE NOCASE AND command_status = 'COMMAND_REQUESTED'",
     deviceId
   );
   if (pendingRelay) {
@@ -509,9 +559,21 @@ router.post('/telemetry', (req: Request, res: Response): void => {
     deviceId,
     command: pendingCmd,
     path: 'Sensor -> Direct Wi-Fi -> Cloud',
+    discovered: true,
+    availableInFleet: true,
     receivedAt: new Date().toISOString()
   });
-});
+}
+
+// POST /api/devices/telemetry
+// Primary telemetry ingest route: also handles path doubling e.g. /api/devices/telemetry
+router.post('/telemetry', processIncomingTelemetry);
+router.post('/api/devices/telemetry', processIncomingTelemetry);
+router.post('/status', processIncomingTelemetry);
+router.post('/register', processIncomingTelemetry);
+router.post('/heartbeat', processIncomingTelemetry);
+router.post('/beacon', processIncomingTelemetry);
+router.post('/discover', processIncomingTelemetry);
 
 // POST /api/devices/provision
 // Method B: Manual Registration or QR Code workflow
