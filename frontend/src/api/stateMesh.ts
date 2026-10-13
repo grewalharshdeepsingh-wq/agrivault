@@ -38,6 +38,11 @@ function safeSetJson(key: string, val: any): void {
   }
 }
 
+let deviceLookup: ((id: string) => ESPDevice | undefined) | null = null;
+export function registerDeviceLookup(fn: (id: string) => ESPDevice | undefined) {
+  deviceLookup = fn;
+}
+
 export const stateMesh = {
   getRooms(): MeshRoom[] {
     return safeGetJson<MeshRoom[]>(STORAGE_KEY_ROOMS, []);
@@ -241,15 +246,43 @@ export const stateMesh = {
       if (targetArea) {
         if (!targetArea.devices) targetArea.devices = [];
         const hasDev = targetArea.devices.some((d: any) => d.id.toUpperCase() === devId);
+        const liveDev = deviceLookup ? deviceLookup(devId) : undefined;
         if (!hasDev) {
-          targetArea.devices.push({
+          targetArea.devices.push(liveDev || ({
             id: devId,
             user_name: `ESP Node: ${devId}`,
             hardware_type: devId.includes('8266') ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1',
             is_online: 1,
             ip_address: '192.168.1.x'
-          } as any);
-          targetArea.deviceCount = targetArea.devices.length;
+          } as any));
+        }
+        targetArea.deviceCount = targetArea.devices.length;
+
+        // Propagate real-time metrics into the AreaCard
+        if (liveDev?.sensors && Array.isArray(liveDev.sensors)) {
+          if (!targetArea.metrics) {
+            targetArea.metrics = {
+              temperature: null,
+              humidity: null,
+              co2: null,
+              ethylene: null,
+              ammonia: null,
+              ethanol: null
+            };
+          }
+          const metricsAny = targetArea.metrics as any;
+          for (const s of liveDev.sensors) {
+            const param = (s as any).parameter || s.sensor_type;
+            if (param) {
+              metricsAny[param] = {
+                value: s.calibrated_reading ?? s.raw_reading,
+                raw: s.raw_reading,
+                unit: s.unit,
+                confidence: 95,
+                health: s.sensor_health || 'healthy'
+              };
+            }
+          }
         }
       }
     }
@@ -316,7 +349,7 @@ export const stateMesh = {
     return remoteDiscovered.filter(dev => {
       const cleanId = dev.id.trim().toUpperCase();
       if (deletedDevices.has(cleanId)) return false;
-      if (assignments[cleanId]) return false; // Assigned to a room! Cannot be in available list!
+      if (assignments[cleanId] || dev.area_id) return false; // Assigned to a room! Cannot be in available list!
       return true;
     });
   }

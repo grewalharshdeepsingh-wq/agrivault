@@ -1,5 +1,5 @@
 import { stateMesh } from './stateMesh';
-import { getFirebaseDevices, initFirebaseRealtime } from './firebase';
+import { getFirebaseDevices, initFirebaseRealtime, saveFirebaseRoom, deleteFirebaseRoom, updateFirebaseDevice } from './firebase';
 
 const API_BASE = '/api';
 
@@ -70,16 +70,38 @@ export const api = {
   createArea: (facilityId: string, data: { name: string; commodity: string }) =>
     request<any>(`/facilities/${facilityId}/areas`, { method: 'POST', body: JSON.stringify(data) }),
   createAreaDirect: async (data: { name: string; commodity: string; facilityId?: string; deviceIds?: string[] }) => {
-    const res = await request<any>('/areas', { method: 'POST', body: JSON.stringify(data) });
+    let res: any = null;
+    try {
+      res = await request<any>('/areas', { method: 'POST', body: JSON.stringify(data) });
+    } catch {
+      res = {
+        id: `area-${Date.now()}`,
+        facility_id: data.facilityId || 'fac-01',
+        name: data.name,
+        commodity: data.commodity || 'General Produce',
+        created_at: new Date().toISOString()
+      };
+    }
     if (res && res.id) {
       stateMesh.recordRoomCreated(res, data.deviceIds || []);
+      saveFirebaseRoom({ ...res, deviceIds: data.deviceIds || [] });
+      if (data.deviceIds && data.deviceIds.length > 0) {
+        for (const devId of data.deviceIds) {
+          updateFirebaseDevice(devId, { areaId: res.id, isDiscovered: 0 });
+        }
+      }
     }
     return res;
   },
 
   // Areas
-  getAreas: (facilityId?: string) =>
-    request<any[]>(facilityId ? `/areas?facilityId=${facilityId}` : '/areas'),
+  getAreas: async (facilityId?: string) => {
+    try {
+      return await request<any[]>(facilityId ? `/areas?facilityId=${facilityId}` : '/areas');
+    } catch {
+      return stateMesh.getRooms();
+    }
+  },
   getArea: (id: string) => request<any>(`/areas/${id}`),
   updateArea: async (id: string, data: { name?: string; commodity?: string }) => {
     stateMesh.recordRoomUpdated(id, data);
@@ -87,7 +109,12 @@ export const api = {
   },
   deleteArea: async (id: string) => {
     stateMesh.recordRoomDeleted(id);
-    return request<any>(`/areas/${id}`, { method: 'DELETE' });
+    deleteFirebaseRoom(id);
+    try {
+      return await request<any>(`/areas/${id}`, { method: 'DELETE' });
+    } catch {
+      return { success: true };
+    }
   },
 
   // Analytics & Statistics
@@ -154,26 +181,49 @@ export const api = {
     } else if (data.areaId === null) {
       stateMesh.recordDeviceUnassigned(id);
     }
-    return request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    updateFirebaseDevice(id, data);
+    try {
+      return await request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+    } catch {
+      return { success: true, ...data };
+    }
   },
   unassignDevice: async (id: string) => {
     stateMesh.recordDeviceUnassigned(id);
-    return request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify({ areaId: null, isDiscovered: 1 }) });
+    updateFirebaseDevice(id, { areaId: null, isDiscovered: 1 });
+    try {
+      return await request<any>(`/devices/${id}`, { method: 'PUT', body: JSON.stringify({ areaId: null, isDiscovered: 1 }) });
+    } catch {
+      return { success: true };
+    }
   },
   deleteDevice: async (id: string) => {
     stateMesh.recordDeviceDeleted(id);
-    return request<any>(`/devices/${id}`, { method: 'DELETE' });
+    try {
+      return await request<any>(`/devices/${id}`, { method: 'DELETE' });
+    } catch {
+      return { success: true };
+    }
   },
   simulateDiscovery: (hardwareType?: 'ESP32' | 'ESP8266') =>
     request<any>('/devices/discover/simulate', {
       method: 'POST',
       body: JSON.stringify({ hardwareType })
     }),
-  approveDevice: (id: string, data: any) =>
-    request<any>(`/devices/${id}/approve`, {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }),
+  approveDevice: async (id: string, data: any) => {
+    if (data.areaId) {
+      stateMesh.recordDeviceAssigned(id, data.areaId);
+    }
+    updateFirebaseDevice(id, data);
+    try {
+      return await request<any>(`/devices/${id}/approve`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+    } catch {
+      return { success: true, ...data };
+    }
+  },
   rejectDevice: (id: string) =>
     request<any>(`/devices/${id}/reject`, { method: 'POST' }),
   revokeDevice: (id: string) =>

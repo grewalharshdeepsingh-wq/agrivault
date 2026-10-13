@@ -132,6 +132,24 @@ export const StorageZonesPage: React.FC<StorageZonesPageProps> = ({
         })}
       </div>
 
+      {/* Add Zone / Room Option Below Grid */}
+      <button
+        onClick={() => setShowAddModal(true)}
+        className="w-full py-4 border-2 border-dashed border-vault-800 hover:border-agri-500/60 rounded-2xl bg-vault-900/40 hover:bg-vault-900/80 transition-all flex items-center justify-center gap-2.5 text-vault-400 hover:text-white group cursor-pointer"
+      >
+        <div className="w-8 h-8 rounded-xl bg-vault-800 group-hover:bg-agri-600/20 group-hover:text-agri-400 flex items-center justify-center transition">
+          <Plus className="w-4 h-4" />
+        </div>
+        <div className="text-left">
+          <p className="text-xs font-bold text-white group-hover:text-agri-400 transition">
+            + Add Storage Room / Section
+          </p>
+          <p className="text-[10px] text-vault-400">
+            Create a new compartmentalized zone and bind telemetry nodes
+          </p>
+        </div>
+      </button>
+
       {/* Add Zone Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">

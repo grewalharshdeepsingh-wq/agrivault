@@ -517,6 +517,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <button
                         onClick={() => {
                           setSelectedDeviceIds([d.id]);
+                          setRoomName(d.user_name || d.device_code || 'Cold Store Room 1');
                           setShowAddRoomModal(true);
                         }}
                         className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow transition flex items-center gap-1"
@@ -579,21 +580,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* TAB 1: Storage Rooms & Sections (Card Grid) */}
       {activeTab === 'rooms' && (
-        <div>
+        <div className="space-y-4">
           {areas.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
-              {areas.map((area: any) => (
-                <AreaCard
-                  key={area.id}
-                  area={area}
-                  onClick={() => onSelectArea(area.id)}
-                  onEditArea={() => openEditModal(area)}
-                  onDeleteArea={() => handleDeleteAreaDirect(area)}
-                  onUnassignDevice={(devId, devName) => handleUnassignDeviceDirect(devId, devName)}
-                  onDeleteDevice={(devId, devName) => handleDeleteDeviceDirect(devId, devName)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
+                {areas.map((area: any) => (
+                  <AreaCard
+                    key={area.id}
+                    area={area}
+                    onClick={() => onSelectArea(area.id)}
+                    onEditArea={() => openEditModal(area)}
+                    onDeleteArea={() => handleDeleteAreaDirect(area)}
+                    onUnassignDevice={(devId, devName) => handleUnassignDeviceDirect(devId, devName)}
+                    onDeleteDevice={(devId, devName) => handleDeleteDeviceDirect(devId, devName)}
+                  />
+                ))}
+              </div>
+
+              {/* Add Room option directly below storage room cards */}
+              <button
+                onClick={openCreateModal}
+                className="w-full py-4 border-2 border-dashed border-vault-800 hover:border-agri-500/60 rounded-2xl bg-vault-900/40 hover:bg-vault-900/80 transition-all flex items-center justify-center gap-2.5 text-vault-400 hover:text-white group cursor-pointer"
+              >
+                <div className="w-8 h-8 rounded-xl bg-vault-800 group-hover:bg-agri-600/20 group-hover:text-agri-400 flex items-center justify-center transition">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <div className="text-left">
+                  <p className="text-xs font-bold text-white group-hover:text-agri-400 transition">
+                    + Add Storage Room / Section
+                  </p>
+                  <p className="text-[10px] text-vault-400">
+                    Create a new section and assign an available ESP node
+                  </p>
+                </div>
+              </button>
+            </>
           ) : (
             <div className="bg-vault-900/60 border border-dashed border-vault-800 rounded-2xl p-8 text-center space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-vault-800/80 border border-vault-700/80 text-vault-400 mx-auto flex items-center justify-center">

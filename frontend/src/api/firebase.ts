@@ -1,8 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getDatabase, ref, onValue, update } from 'firebase/database';
+import { getDatabase, ref, onValue, update, set, remove } from 'firebase/database';
 import { ESPDevice, Sensor } from '../types';
 import { wsManager } from './websocket';
-import { stateMesh } from './stateMesh';
+import { stateMesh, registerDeviceLookup } from './stateMesh';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyDCz56EoH_SDzdQA8iEENOM00b3sSsyG4Y",
@@ -194,6 +194,25 @@ export function initFirebaseRealtime(): void {
     }, (error) => {
       console.warn('[Firebase RTDB] Listen error:', error);
     });
+
+    // Synchronize storage rooms and zones across clients via Firebase
+    const roomsRef = ref(firebaseDb, 'rooms');
+    onValue(roomsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data) return;
+      let roomsAdded = false;
+      Object.entries(data).forEach(([_, r]: [string, any]) => {
+        if (!r || typeof r !== 'object') return;
+        stateMesh.recordRoomCreated(r, r.deviceIds || []);
+        roomsAdded = true;
+      });
+      if (roomsAdded) {
+        wsManager.emit('rooms_synced', {});
+      }
+    }, (error) => {
+      console.warn('[Firebase RTDB] Rooms listen error:', error);
+    });
+
     console.log('[AgriVault] Firebase Realtime Database listener active for Asia-Southeast1 cluster.');
   } catch (err) {
     console.error('[Firebase RTDB] Init error:', err);
@@ -212,4 +231,60 @@ export async function setFirebaseRelay(deviceId: string, targetState: boolean): 
     command: targetState ? 'RELAY_ON' : 'RELAY_OFF',
     commandTimestamp: Date.now()
   });
+}
+
+export async function saveFirebaseRoom(room: any): Promise<void> {
+  if (!room || !room.id) return;
+  try {
+    const roomRef = ref(firebaseDb, `rooms/${room.id}`);
+    await set(roomRef, {
+      id: room.id,
+      name: room.name,
+      commodity: room.commodity || 'General Produce',
+      facility_id: room.facility_id || 'fac-01',
+      created_at: room.created_at || new Date().toISOString(),
+      deviceIds: room.deviceIds || []
+    });
+  } catch (e) {
+    console.warn('[Firebase RTDB] Save room error:', e);
+  }
+}
+
+registerDeviceLookup((id: string) => firebaseDevicesMap.get(id.toUpperCase()));
+
+export async function updateFirebaseDevice(deviceId: string, updates: any): Promise<void> {
+  if (!deviceId) return;
+  const normId = deviceId.trim().toUpperCase();
+  try {
+    const devRef = ref(firebaseDb, `devices/${normId}`);
+    const patch: any = {};
+    if (updates.userName !== undefined) patch.user_name = updates.userName;
+    if (updates.deviceCode !== undefined) patch.device_code = updates.deviceCode;
+    if (updates.areaId !== undefined) patch.area_id = updates.areaId;
+    if (updates.coldStoreName !== undefined) patch.cold_store_name = updates.coldStoreName;
+    if (updates.zoneName !== undefined) patch.zone_name = updates.zoneName;
+    if (updates.rackName !== undefined) patch.rack_name = updates.rackName;
+    if (updates.levelName !== undefined) patch.level_name = updates.levelName;
+    if (updates.description !== undefined) patch.description = updates.description;
+    if (updates.isDiscovered !== undefined) patch.is_discovered = updates.isDiscovered;
+
+    const existing = firebaseDevicesMap.get(normId);
+    if (existing) {
+      firebaseDevicesMap.set(normId, { ...existing, ...patch });
+    }
+
+    await update(devRef, patch);
+  } catch (e) {
+    console.warn('[Firebase RTDB] Update device error:', e);
+  }
+}
+
+export async function deleteFirebaseRoom(roomId: string): Promise<void> {
+  if (!roomId) return;
+  try {
+    const roomRef = ref(firebaseDb, `rooms/${roomId}`);
+    await remove(roomRef);
+  } catch (e) {
+    console.warn('[Firebase RTDB] Delete room error:', e);
+  }
 }

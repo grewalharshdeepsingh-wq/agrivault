@@ -45,7 +45,7 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
       setDisplayName(device.user_name || `ESP Node ${device.id}`);
       setColdStoreName(device.cold_store_name || 'Cold Store A');
       setZoneName(device.zone_name || 'North Zone');
-      setAreaId(device.area_id || (areas.length > 0 ? areas[0].id : ''));
+      setAreaId(device.area_id || (areas.length > 0 ? areas[0].id : '__NEW__'));
       setRackName(device.rack_name || 'Rack 1');
       setLevelName(device.level_name || 'Level 2');
     }
@@ -59,13 +59,32 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
     e.preventDefault();
     setIsSubmitting(true);
     try {
+      let targetAreaId: string | null = areaId || null;
+
+      // Automatically create a storage room section if user opted to create new or has no room selected
+      if (!targetAreaId || targetAreaId === '__NEW__') {
+        const roomTitle = displayName.trim() || device.user_name || `Storage Room (${deviceCode || device.id})`;
+        try {
+          const newRoom = await api.createAreaDirect({
+            name: roomTitle,
+            commodity: 'General Produce',
+            deviceIds: [device.id]
+          });
+          if (newRoom && newRoom.id) {
+            targetAreaId = newRoom.id;
+          }
+        } catch (err) {
+          console.warn('[DeviceConfigureModal] Auto-create room error:', err);
+        }
+      }
+
       if (isPending) {
         await api.approveDevice(device.id, {
           deviceCode,
           userName: displayName,
           coldStoreName,
           zoneName,
-          areaId: areaId || null,
+          areaId: targetAreaId,
           rackName,
           levelName,
           description
@@ -76,11 +95,11 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
           userName: displayName,
           coldStoreName,
           zoneName,
-          areaId: areaId || null,
+          areaId: targetAreaId,
           rackName,
           levelName,
           description,
-          isDiscovered: areaId ? 0 : 1
+          isDiscovered: targetAreaId ? 0 : 1
         });
       }
       onSaved();
@@ -221,20 +240,28 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
             {/* Assigned Room / Area */}
             <div>
               <label className="block text-xs font-semibold text-vault-300 mb-1">
-                Monitored Area / Room
+                Monitored Storage Room / Section
               </label>
               <select
                 value={areaId}
                 onChange={(e) => setAreaId(e.target.value)}
                 className="w-full bg-vault-950 border border-vault-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-agri-500 transition"
               >
-                <option value="">-- Unassigned (Standby Fleet) --</option>
+                <option value="__NEW__">
+                  + Create New Room: "{displayName || 'Storage Room'}"
+                </option>
                 {areas.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.name} ({a.commodity})
                   </option>
                 ))}
+                <option value="">-- Leave Unassigned (Standby Fleet) --</option>
               </select>
+              <p className="text-[10px] text-vault-400 mt-1">
+                {areaId === '__NEW__' || !areaId
+                  ? 'A storage room section will automatically be created and linked to this ESP upon saving.'
+                  : 'Assigning node to this monitored room.'}
+              </p>
             </div>
           </div>
 
