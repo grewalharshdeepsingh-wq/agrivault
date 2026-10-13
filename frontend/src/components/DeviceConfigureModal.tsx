@@ -6,7 +6,6 @@ import {
   Check,
   Cpu,
   Layers,
-  MapPin,
   Sliders,
   ShieldAlert,
   ShieldCheck,
@@ -37,9 +36,6 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
   const [areaId, setAreaId] = useState('');
   const [rackName, setRackName] = useState('Rack 1');
   const [levelName, setLevelName] = useState('Level 2');
-  const [posX, setPosX] = useState(30);
-  const [posY, setPosY] = useState(30);
-  const [posZ, setPosZ] = useState(4);
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -52,9 +48,6 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
       setAreaId(device.area_id || (areas.length > 0 ? areas[0].id : ''));
       setRackName(device.rack_name || 'Rack 1');
       setLevelName(device.level_name || 'Level 2');
-      setPosX(device.pos_x ?? 30);
-      setPosY(device.pos_y ?? 30);
-      setPosZ(device.pos_z ?? 4);
     }
   }, [device, areas]);
 
@@ -75,9 +68,6 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
           areaId: areaId || null,
           rackName,
           levelName,
-          posX,
-          posY,
-          posZ,
           description
         });
       } else {
@@ -89,9 +79,6 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
           areaId: areaId || null,
           rackName,
           levelName,
-          posX,
-          posY,
-          posZ,
           description,
           isDiscovered: areaId ? 0 : 1
         });
@@ -281,48 +268,6 @@ export const DeviceConfigureModal: React.FC<DeviceConfigureModalProps> = ({
             </div>
           </div>
 
-          {/* Coordinates in Facility */}
-          <div className="bg-vault-950/70 border border-vault-800 rounded-xl p-3">
-            <span className="text-xs font-semibold text-vault-300 flex items-center gap-1.5 mb-2">
-              <MapPin className="w-3.5 h-3.5 text-agri-400" />
-              Physical Floor Position Inside Cold Store (Feet)
-            </span>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="text-[10px] text-vault-400 block mb-0.5">X Coordinate (Length ft)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="500"
-                  value={posX}
-                  onChange={(e) => setPosX(Number(e.target.value))}
-                  className="w-full bg-vault-900 border border-vault-750 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-vault-400 block mb-0.5">Y Coordinate (Width ft)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="500"
-                  value={posY}
-                  onChange={(e) => setPosY(Number(e.target.value))}
-                  className="w-full bg-vault-900 border border-vault-750 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-vault-400 block mb-0.5">Z Height (Vertical ft)</label>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={posZ}
-                  onChange={(e) => setPosZ(Number(e.target.value))}
-                  className="w-full bg-vault-900 border border-vault-750 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono"
-                />
-              </div>
-            </div>
-          </div>
 
           {/* Note on Location Changes */}
           <div className="p-3 rounded-xl bg-blue-950/20 border border-blue-500/30 text-xs text-blue-200">
