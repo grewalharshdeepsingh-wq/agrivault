@@ -3,6 +3,7 @@ import { Facility, Alert, ESPDevice } from '../types';
 import { api } from '../api/client';
 import { wsManager, ConnectionMode } from '../api/websocket';
 import { stateMesh } from '../api/stateMesh';
+import { initFirebaseRealtime } from '../api/firebase';
 
 function isDeepEqual(a: any, b: any): boolean {
   if (a === b) return true;
@@ -63,6 +64,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Monitor WebSocket status & connection mode
   useEffect(() => {
+    initFirebaseRealtime();
     return wsManager.onStatusChange((connected, mode) => {
       setIsWsConnected(connected);
       setConnectionMode(mode);

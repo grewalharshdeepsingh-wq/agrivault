@@ -17,12 +17,12 @@ struct SensorData {
   float mq135Ratio;
 };
 
-#define FIRMWARE_VERSION       "v2.4.0-provision"
+#define FIRMWARE_VERSION       "v2.5.0-firebase"
 #define HARDWARE_TYPE          "ESP32-DevKit-V1"
 #define DEFAULT_FACILITY_ID    "fac-01"
 
-// Default Backend URL fallback (editable via Captive Portal without recompiling)
-#define DEFAULT_BACKEND_URL    "http://192.168.1.100:4000"
+// Default Backend URL fallback (Firebase Cloud RTDB or local server)
+#define DEFAULT_BACKEND_URL    "https://agrivault-iot-7a2f-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 // Telemetry transmit interval (in milliseconds)
 #define TELEMETRY_INTERVAL_MS  5000   // 5 seconds

@@ -1,4 +1,5 @@
 import { stateMesh } from './stateMesh';
+import { getFirebaseDevices, initFirebaseRealtime } from './firebase';
 
 const API_BASE = '/api';
 
@@ -97,11 +98,55 @@ export const api = {
   },
 
   // Devices
-  getDevices: (params?: Record<string, string>) => {
+  getDevices: async (params?: Record<string, string>) => {
+    initFirebaseRealtime();
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<any[]>(`/devices${qs}`);
+    let backendDevices: any[] = [];
+    try {
+      backendDevices = await request<any[]>(`/devices${qs}`);
+    } catch {
+      backendDevices = [];
+    }
+
+    const fbDevices = getFirebaseDevices();
+    if (fbDevices.length === 0) return backendDevices;
+
+    const map = new Map<string, any>();
+    for (const d of backendDevices) {
+      if (d && d.id) map.set(d.id.toUpperCase(), d);
+    }
+    for (const fb of fbDevices) {
+      if (fb && fb.id) {
+        const existing = map.get(fb.id.toUpperCase());
+        map.set(fb.id.toUpperCase(), existing ? { ...existing, ...fb } : fb);
+      }
+    }
+    return Array.from(map.values());
   },
-  getAvailableDevices: () => request<any[]>('/devices/available'),
+  getAvailableDevices: async () => {
+    initFirebaseRealtime();
+    let backendDevices: any[] = [];
+    try {
+      backendDevices = await request<any[]>('/devices/available');
+    } catch {
+      backendDevices = [];
+    }
+
+    const fbDevices = getFirebaseDevices().filter(d => (!d.area_id || d.is_discovered === 1) && !d.is_simulated);
+    if (fbDevices.length === 0) return backendDevices;
+
+    const map = new Map<string, any>();
+    for (const d of backendDevices) {
+      if (d && d.id) map.set(d.id.toUpperCase(), d);
+    }
+    for (const fb of fbDevices) {
+      if (fb && fb.id) {
+        const existing = map.get(fb.id.toUpperCase());
+        map.set(fb.id.toUpperCase(), existing ? { ...existing, ...fb } : fb);
+      }
+    }
+    return Array.from(map.values());
+  },
   getDevice: (id: string) => request<any>(`/devices/${id}`),
   updateDevice: async (id: string, data: any) => {
     if (data.areaId) {

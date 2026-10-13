@@ -413,6 +413,7 @@ void transmitTelemetry() {
 
   // Construct honest JSON payload with exact sensor availability flags
   String json = "{";
+  json += "\"id\":\"" + deviceId + "\",";
   json += "\"deviceId\":\"" + deviceId + "\",";
   json += "\"hardware_id\":\"" + macAddress + "\",";
   json += "\"userName\":\"" + deviceName + "\",";
@@ -422,6 +423,10 @@ void transmitTelemetry() {
   json += "\"macAddress\":\"" + macAddress + "\",";
   json += "\"rssi\":" + String(WiFi.RSSI()) + ",";
   json += "\"battery\":3.30,";
+  json += "\"is_online\":1,";
+  json += "\"is_discovered\":1,";
+  json += "\"is_simulated\":0,";
+  json += "\"last_heartbeat\":" + String(millis()) + ",";
 
   if (s.tempInstalled) {
     json += "\"temperature\":" + String(s.tempC, 2) + ",";
@@ -441,7 +446,9 @@ void transmitTelemetry() {
   json += "\"capabilities\":[\"temperature\",\"mq3\",\"mq135\",\"relay\"]";
   json += "}";
 
-  String endpoint = sanitizeUrl(backendUrl) + "/api/devices/telemetry";
+  String srv = sanitizeUrl(backendUrl);
+  bool isFirebase = (srv.indexOf("firebaseio.com") >= 0 || srv.indexOf("firebasedatabase.app") >= 0);
+  String endpoint = isFirebase ? (srv + "/devices/" + deviceId + ".json") : (srv + "/api/devices/telemetry");
   bool isHttps = endpoint.startsWith("https://");
 
   HTTPClient http;
@@ -459,11 +466,11 @@ void transmitTelemetry() {
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.setTimeout(8000);
   http.addHeader("Content-Type", "application/json");
-  if (authToken.length() > 0) {
+  if (authToken.length() > 0 && !isFirebase) {
     http.addHeader("X-Device-Token", authToken);
   }
 
-  int httpCode = http.POST(json);
+  int httpCode = isFirebase ? http.PUT(json) : http.POST(json);
 
   if (httpCode == 200 || httpCode == 201 || httpCode == 202) {
     String response = http.getString();

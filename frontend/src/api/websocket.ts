@@ -180,7 +180,7 @@ class AgriVaultWebSocketManager {
     };
   }
 
-  private emit(eventType: string, data: any): void {
+  public emit(eventType: string, data: any): void {
     const handlers = this.listeners.get(eventType);
     if (handlers) {
       for (const h of handlers) {
