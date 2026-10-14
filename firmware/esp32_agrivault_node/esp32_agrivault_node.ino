@@ -47,7 +47,9 @@ bool connectStationWiFi();
 void setupCaptivePortalRoutes();
 void loadPreferences();
 void savePreferences(String s, String p, String b, String n, String t);
+void initDeviceIdentity();
 String generateDeviceId();
+String getMacAddress();
 String sanitizeUrl(String url);
 
 // --- Hardware Instances ---
@@ -77,13 +79,53 @@ unsigned long buttonPressStart = 0;
 bool buttonHeld = false;
 int wifiFailCount = 0;
 
-// Unique MAC-derived Device ID (e.g. AGR-ESP-A1B2C3)
-String generateDeviceId() {
+// Unique MAC-derived Device ID (e.g. AGR-ESP-A1B2C3) using hardware silicon eFuse
+void initDeviceIdentity() {
   uint8_t mac[6] = {0};
+#if defined(ESP32)
+  uint64_t chipId = ESP.getEfuseMac();
+  for (int i = 0; i < 6; i++) {
+    mac[i] = (uint8_t)((chipId >> (i * 8)) & 0xFF);
+  }
+#elif defined(ESP8266)
   WiFi.macAddress(mac);
-  char buf[20];
-  snprintf(buf, sizeof(buf), "AGR-ESP-%02X%02X%02X", mac[3], mac[4], mac[5]);
-  return String(buf);
+  if (mac[3] == 0 && mac[4] == 0 && mac[5] == 0) {
+    uint32_t cid = ESP.getChipId();
+    mac[3] = (cid >> 16) & 0xFF;
+    mac[4] = (cid >> 8) & 0xFF;
+    mac[5] = cid & 0xFF;
+  }
+#else
+  WiFi.macAddress(mac);
+#endif
+
+  // If MAC was all zeros, fallback to WiFi.macAddress()
+  if (mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0) {
+    WiFi.macAddress(mac);
+  }
+
+  char macBuf[24];
+  snprintf(macBuf, sizeof(macBuf), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  macAddress = String(macBuf);
+
+  char devBuf[24];
+  snprintf(devBuf, sizeof(devBuf), "AGR-ESP-%02X%02X%02X", mac[3], mac[4], mac[5]);
+  deviceId = String(devBuf);
+}
+
+String generateDeviceId() {
+  if (deviceId.length() == 0 || deviceId == "AGR-ESP-000000") {
+    initDeviceIdentity();
+  }
+  return deviceId;
+}
+
+String getMacAddress() {
+  if (macAddress.length() == 0 || macAddress == "00:00:00:00:00:00") {
+    initDeviceIdentity();
+  }
+  return macAddress;
 }
 
 // Clean and normalize backend URL
@@ -115,9 +157,14 @@ void loadPreferences() {
   isProvisioned = prefs.getBool("prov", false) && wifiSsid.length() > 0;
   prefs.end();
 
+  if (deviceName.length() == 0 || deviceName.endsWith("0000")) {
+    deviceName = "Cold Store Node " + deviceId.substring(deviceId.length() - 4);
+  }
+
   Serial.println(F("[NVS] Loaded saved parameters:"));
   Serial.printf("  SSID: %s\n", wifiSsid.length() > 0 ? wifiSsid.c_str() : "(None - unconfigured)");
   Serial.printf("  Backend: %s\n", backendUrl.c_str());
+  Serial.printf("  Device Name: %s\n", deviceName.c_str());
   Serial.printf("  Provisioned Status: %s\n", isProvisioned ? "YES" : "NO");
 }
 
@@ -360,6 +407,10 @@ bool connectStationWiFi() {
     Serial.printf("  RSSI:       %d dBm\n", WiFi.RSSI());
     digitalWrite(PIN_STATUS_LED, HIGH); // Solid LED indicates normal online operation
     wifiFailCount = 0;
+    String liveMac = WiFi.macAddress();
+    if (liveMac.length() > 0 && liveMac != "00:00:00:00:00:00") {
+      macAddress = liveMac;
+    }
     return true;
   }
 
@@ -546,9 +597,8 @@ void setup() {
   digitalWrite(PIN_RELAY, LOW); // Safe default: Relay OFF
   digitalWrite(PIN_STATUS_LED, LOW);
 
-  WiFi.mode(WIFI_STA);
-  macAddress = WiFi.macAddress();
-  deviceId = generateDeviceId();
+  // Initialize unique hardware identity directly from eFuse silicon registers
+  initDeviceIdentity();
 
   Serial.println(F("\n========================================================"));
   Serial.println(F("   ❄️ AGRIVAULT INDUSTRIAL ESP32 NODE INITIALIZING"));
