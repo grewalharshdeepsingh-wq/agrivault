@@ -454,9 +454,13 @@ void transmitTelemetry() {
 
   if (s.tempInstalled) {
     json += "\"temperature\":" + String(s.tempC, 2) + ",";
+  } else {
+    json += "\"temperature\":null,";
   }
   if (s.humInstalled) {
     json += "\"humidity\":" + String(s.humidity, 1) + ",";
+  } else {
+    json += "\"humidity\":null,";
   }
 
   // Honest uncalibrated gas sensor response reporting + calculated ppm estimates
@@ -468,9 +472,15 @@ void transmitTelemetry() {
   json += "\"co2\":" + String(s.co2Ppm, 1) + ",";
   json += "\"ammonia\":" + String(s.ammoniaPpm, 2) + ",";
 
+  // Dynamic capabilities reflecting verified installed hardware
+  String caps = "[";
+  if (s.tempInstalled) caps += "\"temperature\",";
+  if (s.humInstalled) caps += "\"humidity\",";
+  caps += "\"mq3\",\"mq135\",\"co2\",\"ammonia\",\"relay\"]";
+
   // Relay state
   json += "\"relayState\":" + String(relayState ? 1 : 0) + ",";
-  json += "\"capabilities\":[\"temperature\",\"humidity\",\"mq3\",\"mq135\",\"co2\",\"ammonia\",\"relay\"]";
+  json += "\"capabilities\":" + caps;
   json += "}";
 
   String srv = sanitizeUrl(backendUrl);
