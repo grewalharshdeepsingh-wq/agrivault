@@ -37,14 +37,15 @@ export const AreaCard: React.FC<AreaCardProps> = ({
 }) => {
   const { metrics, health_status, health_score, health_reasons, name, commodity, deviceCount, activeAlertsCount } = area;
 
-  const temp = metrics?.temperature;
-  const hum = metrics?.humidity;
-  const co2 = metrics?.co2;
-  const eth = metrics?.ethylene;
-  const nh3 = metrics?.ammonia;
-  const voc = metrics?.ethanol;
+  const isOnlineHardwarePresent = area.devices && area.devices.some((d: any) => d.is_online === 1);
+  const isUnmonitored = !deviceCount || deviceCount === 0 || !isOnlineHardwarePresent;
 
-  const isUnmonitored = !deviceCount || deviceCount === 0;
+  const temp = isOnlineHardwarePresent ? metrics?.temperature : null;
+  const hum = isOnlineHardwarePresent ? metrics?.humidity : null;
+  const co2 = isOnlineHardwarePresent ? metrics?.co2 : null;
+  const eth = isOnlineHardwarePresent ? metrics?.ethylene : null;
+  const nh3 = isOnlineHardwarePresent ? metrics?.ammonia : null;
+  const voc = isOnlineHardwarePresent ? metrics?.ethanol : null;
 
   // Status Styling
   const statusConfig = isUnmonitored
@@ -52,7 +53,7 @@ export const AreaCard: React.FC<AreaCardProps> = ({
         border: 'border-vault-800 hover:border-vault-700',
         badge: 'bg-vault-800 text-vault-400 border-vault-700',
         dot: 'bg-vault-500',
-        label: 'Standby'
+        label: (!deviceCount || deviceCount === 0) ? 'Standby' : 'Standby (Offline)'
       }
     : {
         normal: {

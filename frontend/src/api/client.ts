@@ -199,7 +199,9 @@ export const api = {
       backendDevices = [];
     }
 
-    const fbDevices = getFirebaseDevices().filter(d => (!d.area_id || d.is_discovered === 1) && !d.is_simulated);
+    backendDevices = backendDevices.filter(d => (!d.area_id || d.is_discovered === 1) && d.is_online === 1 && !d.is_simulated);
+
+    const fbDevices = getFirebaseDevices().filter(d => (!d.area_id || d.is_discovered === 1) && d.is_online === 1 && !d.is_simulated);
     if (fbDevices.length === 0) return backendDevices;
 
     const map = new Map<string, any>();

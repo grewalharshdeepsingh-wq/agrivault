@@ -278,7 +278,7 @@ export const stateMesh = {
         for (const d of targetArea.devices) {
           const liveDev = deviceLookup ? deviceLookup(d.id) : undefined;
           const devObj = liveDev || d;
-          if (devObj?.sensors && Array.isArray(devObj.sensors)) {
+          if (devObj?.is_online === 1 && devObj?.sensors && Array.isArray(devObj.sensors)) {
             for (const s of devObj.sensors) {
               const param = (s as any).parameter || s.sensor_type;
               if (param) {
@@ -402,6 +402,7 @@ export const stateMesh = {
   /**
    * Reconciles device list: enforces that assigned devices are marked with area_id,
    * unassigned devices are marked without area_id, and deleted devices are excluded.
+   * Guarantees no device is duplicated.
    */
   reconcileDevices(remoteDevices: ESPDevice[]): ESPDevice[] {
     if (!Array.isArray(remoteDevices)) return [];
@@ -415,11 +416,14 @@ export const stateMesh = {
     const seenIds = new Set<string>();
 
     for (const dev of remoteDevices) {
+      if (!dev || !dev.id) continue;
       const cleanId = dev.id.trim().toUpperCase();
-      if (deletedDevices.has(cleanId)) continue;
+      if (cleanId === 'AGR-ESP-000000' || cleanId.endsWith('000000')) continue;
+      if (deletedDevices.has(cleanId) || seenIds.has(cleanId)) continue;
 
       seenIds.add(cleanId);
       const assignedAreaId = assignments[cleanId];
+      const isOnline = dev.is_online === 1;
 
       if (assignedAreaId) {
         result.push({
@@ -433,7 +437,7 @@ export const stateMesh = {
           ...dev,
           area_id: null,
           area_name: undefined,
-          is_discovered: 1
+          is_discovered: isOnline ? 1 : 0
         });
       }
     }
@@ -443,18 +447,25 @@ export const stateMesh = {
 
   /**
    * Reconciles available discovered devices:
-   * Strips out any devices that have been assigned to a room or deleted!
+   * Strips out any devices that are offline, assigned to a room, or deleted!
    */
   reconcileDiscovered(remoteDiscovered: ESPDevice[]): ESPDevice[] {
     if (!Array.isArray(remoteDiscovered)) return [];
 
     const assignments = this.getAssignments();
     const deletedDevices = new Set(this.getDeletedDevices());
+    const seenIds = new Set<string>();
 
     return remoteDiscovered.filter(dev => {
+      if (!dev || !dev.id) return false;
       const cleanId = dev.id.trim().toUpperCase();
-      if (deletedDevices.has(cleanId)) return false;
-      if (assignments[cleanId] || dev.area_id) return false; // Assigned to a room! Cannot be in available list!
+      if (cleanId === 'AGR-ESP-000000' || cleanId.endsWith('000000')) return false;
+      if (deletedDevices.has(cleanId) || seenIds.has(cleanId)) return false;
+      seenIds.add(cleanId);
+
+      // Must be currently online and unassigned to be in available list!
+      if (dev.is_online !== 1) return false;
+      if (assignments[cleanId] || dev.area_id) return false;
       return true;
     });
   }

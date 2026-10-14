@@ -443,46 +443,51 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Available ESP Nodes Fleet Banner */}
-      {allDevices.filter(d => (!d.area_id || d.is_discovered === 1) && !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected').length > 0 && (
-        <div className="bg-gradient-to-r from-indigo-950/70 via-vault-900 to-indigo-950/70 border border-indigo-500/60 rounded-2xl p-4 shadow-xl">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
-                <Sparkles className="w-5 h-5 animate-pulse" />
-              </div>
-              <div>
-                <p className="text-sm font-bold text-white flex items-center gap-2">
-                  <span>Available ESP Nodes Detected In Fleet</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500 text-white">
-                    {allDevices.filter(d => (!d.area_id || d.is_discovered === 1) && !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected').length} READY
-                  </span>
-                </p>
-                <p className="text-xs text-indigo-200/90 mt-0.5">
-                  Microcontrollers connected over Wi-Fi / Internet and transmitting live telemetry. Ready to assign to a storage room or monitored zone.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={openCreateModal}
-                className="px-3.5 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Create Room with Node</span>
-              </button>
-              <button
-                onClick={onNavigateToDevices}
-                className="px-3 py-2 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-semibold border border-vault-700 transition"
-              >
-                View Fleet ({allDevices.length})
-              </button>
-            </div>
-          </div>
+      {(() => {
+        const availableOnlineDevices = allDevices.filter(
+          d => (!d.area_id || d.is_discovered === 1) && d.is_online === 1 && !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected'
+        );
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3 pt-3 border-t border-indigo-500/20">
-            {allDevices
-              .filter(d => (!d.area_id || d.is_discovered === 1) && !d.is_simulated && d.registration_status !== 'revoked' && d.registration_status !== 'rejected')
-              .map((d) => {
+        if (availableOnlineDevices.length === 0) return null;
+
+        return (
+          <div className="bg-gradient-to-r from-indigo-950/70 via-vault-900 to-indigo-950/70 border border-indigo-500/60 rounded-2xl p-4 shadow-xl">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">
+                  <Sparkles className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>Available ESP Nodes Detected In Fleet</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-500 text-white">
+                      {availableOnlineDevices.length} READY
+                    </span>
+                  </p>
+                  <p className="text-xs text-indigo-200/90 mt-0.5">
+                    Microcontrollers connected over Wi-Fi / Internet and transmitting live telemetry. Ready to assign to a storage room or monitored zone.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={openCreateModal}
+                  className="px-3.5 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Create Room with Node</span>
+                </button>
+                <button
+                  onClick={onNavigateToDevices}
+                  className="px-3 py-2 rounded-lg bg-vault-800 hover:bg-vault-700 text-slate-200 text-xs font-semibold border border-vault-700 transition"
+                >
+                  View Fleet ({allDevices.length})
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3 pt-3 border-t border-indigo-500/20">
+              {availableOnlineDevices.map((d) => {
                 const is8266Node = (d.hardware_type || '').includes('8266') || d.id.includes('8266');
                 const tempVal = d.sensors?.find((s: any) => s.sensor_type === 'temperature')?.calibrated_reading;
                 const humVal = d.sensors?.find((s: any) => s.sensor_type === 'humidity')?.calibrated_reading;
@@ -549,9 +554,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                 );
               })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Main Tab Switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-vault-800 pb-3">
@@ -717,7 +723,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     const matchesStatus =
                       nodeStatusFilter === 'all' ||
-                      (nodeStatusFilter === 'available' && (!d.area_id || d.is_discovered === 1) && d.registration_status !== 'revoked') ||
+                      (nodeStatusFilter === 'available' && (!d.area_id || d.is_discovered === 1) && d.is_online === 1 && d.registration_status !== 'revoked') ||
                       (nodeStatusFilter === 'online' && d.is_online === 1) ||
                       (nodeStatusFilter === 'offline' && d.is_online === 0) ||
                       (nodeStatusFilter === 'pending' && d.registration_status === 'pending');

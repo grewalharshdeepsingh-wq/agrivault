@@ -165,25 +165,30 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
       if (rawHb > 1577836800000) {
         // True Unix epoch timestamp (e.g. from Firebase server timestamp)
         lastHbStr = new Date(rawHb).toISOString();
-        isOnline = (nowMs - rawHb < 45000) ? 1 : 0;
+        isOnline = (nowMs - rawHb < 20000) ? 1 : 0;
       } else {
         // Millis counter: check if heartbeat changed or is actively fresh
         const prevHb = lastDeviceHeartbeats.get(normId);
         const prevArrival = lastDeviceArrivalTimes.get(normId) || 0;
-        if (prevHb === undefined || prevHb !== rawHb) {
+        if (prevHb === undefined) {
+          // First time seeing this on page load! If it's a static millis number, do NOT assume it's live!
+          lastDeviceHeartbeats.set(normId, rawHb);
+          isOnline = 0; // Stale until we see an active heartbeat increment!
+        } else if (prevHb !== rawHb) {
+          // Counter incremented! Active live transmission!
           lastDeviceHeartbeats.set(normId, rawHb);
           lastDeviceArrivalTimes.set(normId, nowMs);
           isOnline = 1;
         } else {
-          isOnline = (nowMs - prevArrival < 45000) ? 1 : 0;
+          isOnline = (nowMs - prevArrival < 20000) ? 1 : 0;
         }
       }
     } else if (typeof rawHb === 'string') {
       const parsed = Date.parse(rawHb);
       if (!isNaN(parsed) && parsed > 1577836800000) {
-        isOnline = (nowMs - parsed < 45000) ? 1 : 0;
+        isOnline = (nowMs - parsed < 20000) ? 1 : 0;
       } else {
-        isOnline = 1;
+        isOnline = 0;
       }
       lastHbStr = rawHb;
     }
@@ -220,17 +225,69 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
     signal_rssi: raw.signal_rssi ?? raw.rssi ?? -60,
     battery_voltage: raw.battery_voltage ?? raw.battery ?? 3.3,
     is_enabled: raw.is_enabled ?? 1,
-    is_discovered: assignedAreaId ? 0 : 1,
+    is_discovered: (assignedAreaId || isOnline === 0) ? 0 : 1,
     is_simulated: 0,
     installation_date: raw.installation_date || new Date().toISOString().split('T')[0],
     area_name: raw.area_name || null,
-    sensors
-  };
+    sensors: isOnline === 1 ? sensors : [],
+    _raw: raw
+  } as any;
+}
+
+let watchdogInterval: any = null;
+
+function startWatchdog(): void {
+  if (watchdogInterval) return;
+  watchdogInterval = setInterval(() => {
+    const nowMs = Date.now();
+    let hasChanged = false;
+
+    for (const [normId, dev] of firebaseDevicesMap.entries()) {
+      const raw = (dev as any)._raw;
+      const rawHb = raw?.last_heartbeat ?? raw?.lastHeartbeat ?? raw?.timestamp;
+      let shouldBeOnline = 0;
+
+      if (rawHb !== undefined && rawHb !== null) {
+        if (typeof rawHb === 'number') {
+          if (rawHb > 1577836800000) {
+            shouldBeOnline = (nowMs - rawHb < 20000) ? 1 : 0;
+          } else {
+            const lastArrival = lastDeviceArrivalTimes.get(normId) || 0;
+            shouldBeOnline = (nowMs - lastArrival < 20000 && lastArrival > 0) ? 1 : 0;
+          }
+        } else if (typeof rawHb === 'string') {
+          const parsed = Date.parse(rawHb);
+          if (!isNaN(parsed) && parsed > 1577836800000) {
+            shouldBeOnline = (nowMs - parsed < 20000) ? 1 : 0;
+          }
+        }
+      }
+
+      if (dev.is_online !== shouldBeOnline) {
+        dev.is_online = shouldBeOnline;
+        dev.is_discovered = (dev.area_id || shouldBeOnline === 0) ? 0 : 1;
+        if (shouldBeOnline === 0) {
+          dev.sensors = [];
+        } else if (raw) {
+          dev.sensors = buildSensors(normId, dev.area_id, raw);
+        }
+        wsManager.emit('device_updated', dev);
+        wsManager.emit(shouldBeOnline === 1 ? 'device_online' : 'device_offline', { deviceId: normId });
+        hasChanged = true;
+      }
+    }
+
+    if (hasChanged) {
+      wsManager.emit('telemetry_update', {});
+    }
+  }, 2500);
 }
 
 export function initFirebaseRealtime(): void {
   if (isInitialized) return;
   isInitialized = true;
+
+  startWatchdog();
 
   try {
     const devicesRef = ref(firebaseDb, 'devices');
