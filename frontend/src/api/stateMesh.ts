@@ -264,16 +264,14 @@ export const stateMesh = {
 
     // 4. Propagate real-time metrics into AreaCards for all merged rooms
     for (const targetArea of mergedAreas) {
-      if (!targetArea.metrics) {
-        targetArea.metrics = {
-          temperature: null,
-          humidity: null,
-          co2: null,
-          ethylene: null,
-          ammonia: null,
-          ethanol: null
-        };
-      }
+      targetArea.metrics = {
+        temperature: null,
+        humidity: null,
+        co2: null,
+        ethylene: null,
+        ammonia: null,
+        ethanol: null
+      };
       const metricsAny = targetArea.metrics as any;
 
       if (Array.isArray(targetArea.devices)) {
@@ -284,23 +282,29 @@ export const stateMesh = {
             for (const s of devObj.sensors) {
               const param = (s as any).parameter || s.sensor_type;
               if (param) {
-                const metricObj = {
-                  value: s.calibrated_reading ?? s.raw_reading,
-                  raw: s.raw_reading,
-                  unit: s.unit,
-                  confidence: 95,
-                  health: s.sensor_health || 'healthy'
-                };
-                metricsAny[param] = metricObj;
+                const val = s.calibrated_reading ?? s.raw_reading;
+                if (val !== undefined && val !== null && !isNaN(val)) {
+                  // Only treat humidity as valid if it is positive (> 0)
+                  if (param === 'humidity' && val <= 0) continue;
 
-                // Ensure AreaCard CO2 and Ammonia cards receive MQ-135 readings if distinct sensors are absent
-                if (param === 'mq135') {
-                  if (!metricsAny.co2) metricsAny.co2 = metricObj;
-                  if (!metricsAny.ammonia) metricsAny.ammonia = metricObj;
-                }
-                // Ensure AreaCard Ethanol card receives MQ-3 readings if distinct sensor is absent
-                if (param === 'mq3') {
-                  if (!metricsAny.ethanol) metricsAny.ethanol = metricObj;
+                  const metricObj = {
+                    value: val,
+                    raw: s.raw_reading,
+                    unit: s.unit,
+                    confidence: 95,
+                    health: s.sensor_health || 'healthy'
+                  };
+                  metricsAny[param] = metricObj;
+
+                  // Ensure AreaCard CO2 and Ammonia cards receive MQ-135 readings if distinct sensors are absent
+                  if (param === 'mq135') {
+                    if (!metricsAny.co2) metricsAny.co2 = metricObj;
+                    if (!metricsAny.ammonia) metricsAny.ammonia = metricObj;
+                  }
+                  // Ensure AreaCard Ethanol card receives MQ-3 readings if distinct sensor is absent
+                  if (param === 'mq3') {
+                    if (!metricsAny.ethanol) metricsAny.ethanol = metricObj;
+                  }
                 }
               }
             }
@@ -315,8 +319,10 @@ export const stateMesh = {
 
     if (Array.isArray(remoteOverview.devices)) {
       for (const d of remoteOverview.devices) {
-        if (d.is_online === 1 && !deletedDevices.has(d.id.toUpperCase())) {
-          seenOnlineIds.add(d.id.toUpperCase());
+        const cleanId = (d.id || '').toUpperCase();
+        if (cleanId === 'AGR-ESP-000000' || cleanId.endsWith('000000')) continue;
+        if (d.is_online === 1 && !deletedDevices.has(cleanId)) {
+          seenOnlineIds.add(cleanId);
           onlineDevs.push(d);
         }
       }
@@ -324,10 +330,12 @@ export const stateMesh = {
 
     if (deviceLookup) {
       for (const devId of Object.keys(assignments)) {
-        if (deletedDevices.has(devId) || seenOnlineIds.has(devId)) continue;
-        const liveDev = deviceLookup(devId);
+        const cleanId = devId.toUpperCase();
+        if (cleanId === 'AGR-ESP-000000' || cleanId.endsWith('000000')) continue;
+        if (deletedDevices.has(cleanId) || seenOnlineIds.has(cleanId)) continue;
+        const liveDev = deviceLookup(cleanId);
         if (liveDev && liveDev.is_online === 1) {
-          seenOnlineIds.add(devId);
+          seenOnlineIds.add(cleanId);
           onlineDevs.push(liveDev);
         }
       }
@@ -361,9 +369,13 @@ export const stateMesh = {
 
       if (temps.length > 0) {
         avgTemp = +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+      } else {
+        avgTemp = null;
       }
       if (hums.length > 0) {
         avgHum = Math.round(hums.reduce((a, b) => a + b, 0) / hums.length);
+      } else {
+        avgHum = null;
       }
       if (co2s.length > 0) {
         const maxCo2 = Math.max(...co2s);

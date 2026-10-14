@@ -22,6 +22,8 @@ export const firebaseDb = getDatabase(app);
 const firebaseDevicesMap = new Map<string, ESPDevice>();
 const discoveredDevicesSet = new Set<string>();
 const lastDeviceSignatures = new Map<string, string>();
+const lastDeviceHeartbeats = new Map<string, number>();
+const lastDeviceArrivalTimes = new Map<string, number>();
 let isInitialized = false;
 
 function getOrBuildSensor(
@@ -67,15 +69,21 @@ function buildSensors(deviceId: string, areaId: string | null, raw: any, existin
   const sensors: Sensor[] = [];
 
   if (raw.temperature !== undefined && raw.temperature !== null) {
-    sensors.push(getOrBuildSensor(
-      deviceId, areaId, 'temperature', 'Temperature Probe (DS18B20)', '°C', 'GPIO 4', Number(raw.temperature), existingSensors
-    ));
+    const hasTempCap = !Array.isArray(raw.capabilities) || raw.capabilities.includes('temperature');
+    if (hasTempCap) {
+      sensors.push(getOrBuildSensor(
+        deviceId, areaId, 'temperature', 'Temperature Probe (DS18B20)', '°C', 'GPIO 4', Number(raw.temperature), existingSensors
+      ));
+    }
   }
 
   if (raw.humidity !== undefined && raw.humidity !== null && Number(raw.humidity) > 0) {
-    sensors.push(getOrBuildSensor(
-      deviceId, areaId, 'humidity', 'Relative Humidity (DHT11)', '%', 'GPIO 32', Number(raw.humidity), existingSensors
-    ));
+    const hasHumCap = !Array.isArray(raw.capabilities) || raw.capabilities.includes('humidity');
+    if (hasHumCap) {
+      sensors.push(getOrBuildSensor(
+        deviceId, areaId, 'humidity', 'Relative Humidity (DHT11)', '%', 'GPIO 32', Number(raw.humidity), existingSensors
+      ));
+    }
   }
 
   if (raw.mq3 !== undefined && raw.mq3 !== null) {
@@ -150,17 +158,35 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
   const nowMs = Date.now();
   const rawHb = raw.last_heartbeat ?? raw.lastHeartbeat ?? raw.timestamp;
   let lastHbStr = existingDev?.last_heartbeat || new Date().toISOString();
-  let isOnline = raw.is_online !== undefined ? Number(raw.is_online) : 1;
+  let isOnline = 0;
 
-  if (typeof rawHb === 'number') {
-    if (rawHb > 1577836800000) {
-      lastHbStr = new Date(rawHb).toISOString();
-      isOnline = nowMs - rawHb < 60000 ? 1 : 0;
-    } else {
-      isOnline = 1;
+  if (rawHb !== undefined && rawHb !== null) {
+    if (typeof rawHb === 'number') {
+      if (rawHb > 1577836800000) {
+        // True Unix epoch timestamp (e.g. from Firebase server timestamp)
+        lastHbStr = new Date(rawHb).toISOString();
+        isOnline = (nowMs - rawHb < 45000) ? 1 : 0;
+      } else {
+        // Millis counter: check if heartbeat changed or is actively fresh
+        const prevHb = lastDeviceHeartbeats.get(normId);
+        const prevArrival = lastDeviceArrivalTimes.get(normId) || 0;
+        if (prevHb === undefined || prevHb !== rawHb) {
+          lastDeviceHeartbeats.set(normId, rawHb);
+          lastDeviceArrivalTimes.set(normId, nowMs);
+          isOnline = 1;
+        } else {
+          isOnline = (nowMs - prevArrival < 45000) ? 1 : 0;
+        }
+      }
+    } else if (typeof rawHb === 'string') {
+      const parsed = Date.parse(rawHb);
+      if (!isNaN(parsed) && parsed > 1577836800000) {
+        isOnline = (nowMs - parsed < 45000) ? 1 : 0;
+      } else {
+        isOnline = 1;
+      }
+      lastHbStr = rawHb;
     }
-  } else if (typeof rawHb === 'string') {
-    lastHbStr = rawHb;
   }
 
   const sensors = buildSensors(normId, assignedAreaId, raw, existingDev?.sensors);
@@ -212,12 +238,21 @@ export function initFirebaseRealtime(): void {
       const data = snapshot.val();
       if (!data) return;
 
+      const activeKeys = new Set<string>();
+
       Object.entries(data).forEach(([key, val]: [string, any]) => {
         if (!val || typeof val !== 'object') return;
         if (val.is_simulated === 1) return;
 
         const normId = (key || val.deviceId || val.id || '').trim().toUpperCase();
         if (!normId) return;
+
+        // Strictly ignore ghost dummy device from pre-eFuse firmware
+        if (normId === 'AGR-ESP-000000' || normId.endsWith('000000')) {
+          return;
+        }
+
+        activeKeys.add(normId);
 
         const dev = rawToESPDevice(normId, val);
         firebaseDevicesMap.set(normId, dev);
@@ -241,6 +276,18 @@ export function initFirebaseRealtime(): void {
           }
         }
       });
+
+      // Prune deleted or ghost nodes from in-memory cache and emit deletion
+      for (const cachedId of Array.from(firebaseDevicesMap.keys())) {
+        if (!activeKeys.has(cachedId) || cachedId === 'AGR-ESP-000000' || cachedId.endsWith('000000')) {
+          firebaseDevicesMap.delete(cachedId);
+          discoveredDevicesSet.delete(cachedId);
+          lastDeviceSignatures.delete(cachedId);
+          lastDeviceHeartbeats.delete(cachedId);
+          lastDeviceArrivalTimes.delete(cachedId);
+          wsManager.emit('device_deleted', { deviceId: cachedId });
+        }
+      }
     }, (error) => {
       console.warn('[Firebase RTDB] Listen error:', error);
     });

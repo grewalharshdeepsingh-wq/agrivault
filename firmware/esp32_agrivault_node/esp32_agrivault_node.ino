@@ -440,7 +440,7 @@ SensorData acquireSensors() {
   // 2. DHT11 / DHT22 Digital Humidity & Secondary Temperature
   float h = dht.readHumidity();
   float dhtTemp = dht.readTemperature();
-  if (!isnan(h) && h >= 0.0f && h <= 100.0f) {
+  if (!isnan(h) && h > 1.0f && h <= 100.0f) {
     data.humInstalled = true;
     data.humidity = h;
   } else {
@@ -486,6 +486,11 @@ void transmitTelemetry() {
 
   SensorData s = acquireSensors();
 
+  String srv = sanitizeUrl(backendUrl);
+  bool isFirebase = (srv.indexOf("firebaseio.com") >= 0 || srv.indexOf("firebasedatabase.app") >= 0);
+  String endpoint = isFirebase ? (srv + "/devices/" + deviceId + ".json") : (srv + "/api/devices/telemetry");
+  bool isHttps = endpoint.startsWith("https://");
+
   // Construct honest JSON payload with exact sensor availability flags
   String json = "{";
   json += "\"id\":\"" + deviceId + "\",";
@@ -501,7 +506,11 @@ void transmitTelemetry() {
   json += "\"is_online\":1,";
   json += "\"is_discovered\":1,";
   json += "\"is_simulated\":0,";
-  json += "\"last_heartbeat\":" + String(millis()) + ",";
+  if (isFirebase) {
+    json += "\"last_heartbeat\":{\".sv\":\"timestamp\"},";
+  } else {
+    json += "\"last_heartbeat\":" + String(millis()) + ",";
+  }
 
   if (s.tempInstalled) {
     json += "\"temperature\":" + String(s.tempC, 2) + ",";
@@ -533,11 +542,6 @@ void transmitTelemetry() {
   json += "\"relayState\":" + String(relayState ? 1 : 0) + ",";
   json += "\"capabilities\":" + caps;
   json += "}";
-
-  String srv = sanitizeUrl(backendUrl);
-  bool isFirebase = (srv.indexOf("firebaseio.com") >= 0 || srv.indexOf("firebasedatabase.app") >= 0);
-  String endpoint = isFirebase ? (srv + "/devices/" + deviceId + ".json") : (srv + "/api/devices/telemetry");
-  bool isHttps = endpoint.startsWith("https://");
 
   HTTPClient http;
   WiFiClient clientHttp;

@@ -127,24 +127,10 @@ export const api = {
     const assignedDevs = fbDevices.filter(d => (assignments[d.id.toUpperCase()] === id) || (d.area_id === id));
 
     if (assignedDevs.length > 0) {
-      if (!res.devices) res.devices = [];
-      const devMap = new Map<string, any>();
-      for (const d of res.devices) {
-        devMap.set(d.id.toUpperCase(), d);
-      }
-      for (const d of assignedDevs) {
-        const existing = devMap.get(d.id.toUpperCase());
-        devMap.set(d.id.toUpperCase(), existing ? { ...existing, ...d } : d);
-      }
-      res.devices = Array.from(devMap.values());
+      res.devices = assignedDevs;
 
-      // Merge sensors
+      // Real sensors from the physical assigned devices only (no phantom sensors)
       const sensorMap = new Map<string, any>();
-      if (Array.isArray(res.sensors)) {
-        for (const s of res.sensors) {
-          sensorMap.set(s.sensor_type, s);
-        }
-      }
       for (const d of assignedDevs) {
         if (Array.isArray(d.sensors)) {
           for (const s of d.sensors) {
