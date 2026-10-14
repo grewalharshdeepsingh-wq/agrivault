@@ -88,13 +88,14 @@ export const LiveMonitoringPage: React.FC = () => {
           {filteredSensors.map((s: any) => {
             const isTemp = s.sensor_type === 'temperature';
             const isHum = s.sensor_type === 'humidity';
-            const isGas = s.sensor_type === 'mq3' || s.sensor_type === 'mq135';
+            const isCo2 = s.sensor_type === 'co2';
+            const isGas = s.sensor_type === 'mq3' || s.sensor_type === 'mq135' || s.sensor_type === 'ammonia' || s.sensor_type === 'ethanol';
 
             // Staleness evaluation
             const readingTime = s.last_reading_time ? new Date(s.last_reading_time).getTime() : 0;
             const now = Date.now();
             const ageSec = Math.max(0, Math.floor((now - readingTime) / 1000));
-            const isFresh = ageSec <= 90 && s.is_device_online;
+            const isFresh = (ageSec <= 90 || s.is_device_online) && s.is_device_online;
 
             const val = s.calibrated_reading ?? s.raw_reading;
 
@@ -113,6 +114,7 @@ export const LiveMonitoringPage: React.FC = () => {
                       <div className={`p-2 rounded-xl ${
                         isTemp ? 'bg-rose-500/10 text-rose-400' :
                         isHum ? 'bg-sky-500/10 text-sky-400' :
+                        isCo2 ? 'bg-emerald-500/10 text-emerald-400' :
                         'bg-amber-500/10 text-amber-400'
                       }`}>
                         {isTemp ? <Thermometer className="w-4 h-4" /> : isHum ? <Droplets className="w-4 h-4" /> : <Wind className="w-4 h-4" />}
@@ -137,7 +139,7 @@ export const LiveMonitoringPage: React.FC = () => {
                     {isFresh ? (
                       <div className="flex items-baseline gap-1.5">
                         <span className="text-3xl font-black font-mono text-white tracking-tight">
-                          {val !== null && val !== undefined ? Number(val).toFixed(isTemp ? 1 : 0) : '--'}
+                          {val !== null && val !== undefined ? Number(val).toFixed(isTemp || s.sensor_type === 'ammonia' || s.sensor_type === 'ethanol' ? 1 : 0) : '--'}
                         </span>
                         <span className="text-xs text-vault-400 font-bold">{s.unit}</span>
                       </div>

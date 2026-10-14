@@ -35,7 +35,9 @@
 #include <Preferences.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include <DHT.h>
 #include "config.h"
+#include "calibration.h"
 
 // Explicit Forward Declarations (Required for Arduino IDE preprocessor)
 SensorData acquireSensors();
@@ -55,6 +57,7 @@ DNSServer dnsServer;
 
 OneWire oneWire(PIN_DS18B20);
 DallasTemperature ds18b20(&oneWire);
+DHT dht(PIN_DHT11, DHT11);
 
 // --- Device State & Settings ---
 String deviceId;
@@ -78,6 +81,9 @@ int wifiFailCount = 0;
 String generateDeviceId() {
   uint8_t mac[6] = {0};
   esp_read_mac(mac, ESP_MAC_WIFI_STA);
+  if (mac[0] == 0 && mac[1] == 0 && mac[2] == 0 && mac[3] == 0 && mac[4] == 0 && mac[5] == 0) {
+    WiFi.macAddress(mac);
+  }
   char buf[20];
   snprintf(buf, sizeof(buf), "AGR-ESP-%02X%02X%02X", mac[3], mac[4], mac[5]);
   return String(buf);
@@ -372,7 +378,7 @@ bool connectStationWiFi() {
 SensorData acquireSensors() {
   SensorData data;
 
-  // 1. DS18B20 Digital Temperature
+  // 1. DS18B20 Digital Temperature Probe
   ds18b20.requestTemperatures();
   float t = ds18b20.getTempCByIndex(0);
   if (t == DEVICE_DISCONNECTED_C || t < -50.0f || t > 85.0f) {
@@ -383,22 +389,43 @@ SensorData acquireSensors() {
     data.tempC = t;
   }
 
-  // 2. DHT11 Digital Humidity / Secondary Temperature
-  // Simple reading or fallback flag
-  data.humInstalled = false;
-  data.humidity = 0.0f;
+  // 2. DHT11 / DHT22 Digital Humidity & Secondary Temperature
+  float h = dht.readHumidity();
+  float dhtTemp = dht.readTemperature();
+  if (!isnan(h) && h >= 0.0f && h <= 100.0f) {
+    data.humInstalled = true;
+    data.humidity = h;
+  } else {
+    data.humInstalled = false;
+    data.humidity = 0.0f;
+  }
+
+  // Fallback: If DS18B20 probe is disconnected or not installed, use DHT temperature!
+  if (!data.tempInstalled && !isnan(dhtTemp) && dhtTemp >= -40.0f && dhtTemp <= 85.0f) {
+    data.tempInstalled = true;
+    data.tempC = dhtTemp;
+  }
 
   // 3. MQ-3 Gas Sensor (ADC1 Channel 7 / GPIO 35)
-  // Zero-Fabrication: Report honest ADC value & Rs/R0 ratio, NOT fake ethylene
   data.mq3Raw = analogRead(PIN_MQ3_GAS);
   float mq3Voltage = (data.mq3Raw / 4095.0f) * 3.3f;
   data.mq3Ratio = mq3Voltage > 0.05f ? ((3.3f - mq3Voltage) / mq3Voltage) : 1.0f;
+  data.mq3EthanolPpm = estimateMQ3EthanolPpm(data.mq3Raw);
 
   // 4. MQ-135 Air Quality Sensor (ADC1 Channel 6 / GPIO 34)
-  // Zero-Fabrication: Report honest ADC value & Rs/R0 ratio, NOT fake selective CO2
   data.mq135Raw = analogRead(PIN_MQ135_GAS);
   float mq135Voltage = (data.mq135Raw / 4095.0f) * 3.3f;
   data.mq135Ratio = mq135Voltage > 0.05f ? ((3.3f - mq135Voltage) / mq135Voltage) : 1.0f;
+  data.co2Ppm = estimateMQ135CO2Ppm(data.mq135Raw);
+  data.ammoniaPpm = estimateMQ135AmmoniaPpm(data.mq135Raw);
+
+  // Real-time Serial diagnostics for physical debugging
+  Serial.println(F("----- [Sensor Diagnostics] -----"));
+  Serial.printf("  > DS18B20 (GPIO %d) : %s\n", PIN_DS18B20, data.tempInstalled ? (String(data.tempC, 2) + " C").c_str() : "DISCONNECTED / -127C (Requires 4.7k pull-up between DATA & 3.3V)");
+  Serial.printf("  > DHT11   (GPIO %d) : %s\n", PIN_DHT11, data.humInstalled ? (String(data.humidity, 1) + " %RH | Temp: " + String(dhtTemp, 1) + " C").c_str() : "NO SIGNAL / DISCONNECTED (check pin GPIO 32)");
+  Serial.printf("  > MQ-3    (GPIO %d) : Raw ADC = %d (%.2fV) | Ethanol ~ %.2f ppm\n", PIN_MQ3_GAS, data.mq3Raw, mq3Voltage, data.mq3EthanolPpm);
+  Serial.printf("  > MQ-135  (GPIO %d) : Raw ADC = %d (%.2fV) | CO2 ~ %.1f ppm | NH3 ~ %.2f ppm\n", PIN_MQ135_GAS, data.mq135Raw, mq135Voltage, data.co2Ppm, data.ammoniaPpm);
+  Serial.println(F("---------------------------------"));
 
   return data;
 }
@@ -435,15 +462,18 @@ void transmitTelemetry() {
     json += "\"humidity\":" + String(s.humidity, 1) + ",";
   }
 
-  // Honest uncalibrated gas sensor response reporting
+  // Honest uncalibrated gas sensor response reporting + calculated ppm estimates
   json += "\"mq3\":" + String(s.mq3Raw) + ",";
   json += "\"mq3_ratio\":" + String(s.mq3Ratio, 2) + ",";
+  json += "\"ethanol\":" + String(s.mq3EthanolPpm, 2) + ",";
   json += "\"mq135\":" + String(s.mq135Raw) + ",";
   json += "\"mq135_ratio\":" + String(s.mq135Ratio, 2) + ",";
+  json += "\"co2\":" + String(s.co2Ppm, 1) + ",";
+  json += "\"ammonia\":" + String(s.ammoniaPpm, 2) + ",";
 
   // Relay state
   json += "\"relayState\":" + String(relayState ? 1 : 0) + ",";
-  json += "\"capabilities\":[\"temperature\",\"mq3\",\"mq135\",\"relay\"]";
+  json += "\"capabilities\":[\"temperature\",\"humidity\",\"mq3\",\"mq135\",\"co2\",\"ammonia\",\"relay\"]";
   json += "}";
 
   String srv = sanitizeUrl(backendUrl);
@@ -470,7 +500,7 @@ void transmitTelemetry() {
     http.addHeader("X-Device-Token", authToken);
   }
 
-  int httpCode = isFirebase ? http.PUT(json) : http.POST(json);
+  int httpCode = isFirebase ? http.sendRequest("PATCH", json) : http.POST(json);
 
   if (httpCode == 200 || httpCode == 201 || httpCode == 202) {
     String response = http.getString();
@@ -509,12 +539,16 @@ void setup() {
   digitalWrite(PIN_RELAY, LOW); // Safe default: Relay OFF
   digitalWrite(PIN_STATUS_LED, LOW);
 
+  WiFi.mode(WIFI_STA);
   uint8_t macInit[6] = {0};
   esp_read_mac(macInit, ESP_MAC_WIFI_STA);
   char macBuf[20];
   snprintf(macBuf, sizeof(macBuf), "%02X:%02X:%02X:%02X:%02X:%02X",
            macInit[0], macInit[1], macInit[2], macInit[3], macInit[4], macInit[5]);
   macAddress = String(macBuf);
+  if (macAddress == "00:00:00:00:00:00") {
+    macAddress = WiFi.macAddress();
+  }
   deviceId = generateDeviceId();
 
   Serial.println(F("\n========================================================"));
@@ -523,6 +557,9 @@ void setup() {
   Serial.println(F("========================================================"));
 
   ds18b20.begin();
+  dht.begin();
+  pinMode(PIN_MQ3_GAS, INPUT);
+  pinMode(PIN_MQ135_GAS, INPUT);
 
   loadPreferences();
 

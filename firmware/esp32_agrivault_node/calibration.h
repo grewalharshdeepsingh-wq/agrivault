@@ -11,7 +11,7 @@ struct GasCalibration {
     float mq135_ro = 35.0;     // Clean air baseline resistance for MQ-135
 };
 
-extern GasCalibration gasCal;
+static GasCalibration gasCal;
 
 // Converts raw 12-bit ADC value (0-4095) on ESP32 to Sensor Resistance (Rs)
 inline float calculateSensorResistance(int rawAdc, float rl) {

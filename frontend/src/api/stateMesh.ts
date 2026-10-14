@@ -245,9 +245,9 @@ export const stateMesh = {
       const targetArea = mergedAreas.find(a => a.id === areaId);
       if (targetArea) {
         if (!targetArea.devices) targetArea.devices = [];
-        const hasDev = targetArea.devices.some((d: any) => d.id.toUpperCase() === devId);
         const liveDev = deviceLookup ? deviceLookup(devId) : undefined;
-        if (!hasDev) {
+        const devIdx = targetArea.devices.findIndex((d: any) => d.id.toUpperCase() === devId);
+        if (devIdx === -1) {
           targetArea.devices.push(liveDev || ({
             id: devId,
             user_name: `ESP Node: ${devId}`,
@@ -255,42 +255,135 @@ export const stateMesh = {
             is_online: 1,
             ip_address: '192.168.1.x'
           } as any));
+        } else if (liveDev) {
+          targetArea.devices[devIdx] = { ...targetArea.devices[devIdx], ...liveDev };
         }
         targetArea.deviceCount = targetArea.devices.length;
+      }
+    }
 
-        // Propagate real-time metrics into the AreaCard
-        if (liveDev?.sensors && Array.isArray(liveDev.sensors)) {
-          if (!targetArea.metrics) {
-            targetArea.metrics = {
-              temperature: null,
-              humidity: null,
-              co2: null,
-              ethylene: null,
-              ammonia: null,
-              ethanol: null
-            };
-          }
-          const metricsAny = targetArea.metrics as any;
-          for (const s of liveDev.sensors) {
-            const param = (s as any).parameter || s.sensor_type;
-            if (param) {
-              metricsAny[param] = {
-                value: s.calibrated_reading ?? s.raw_reading,
-                raw: s.raw_reading,
-                unit: s.unit,
-                confidence: 95,
-                health: s.sensor_health || 'healthy'
-              };
+    // 4. Propagate real-time metrics into AreaCards for all merged rooms
+    for (const targetArea of mergedAreas) {
+      if (!targetArea.metrics) {
+        targetArea.metrics = {
+          temperature: null,
+          humidity: null,
+          co2: null,
+          ethylene: null,
+          ammonia: null,
+          ethanol: null
+        };
+      }
+      const metricsAny = targetArea.metrics as any;
+
+      if (Array.isArray(targetArea.devices)) {
+        for (const d of targetArea.devices) {
+          const liveDev = deviceLookup ? deviceLookup(d.id) : undefined;
+          const devObj = liveDev || d;
+          if (devObj?.sensors && Array.isArray(devObj.sensors)) {
+            for (const s of devObj.sensors) {
+              const param = (s as any).parameter || s.sensor_type;
+              if (param) {
+                const metricObj = {
+                  value: s.calibrated_reading ?? s.raw_reading,
+                  raw: s.raw_reading,
+                  unit: s.unit,
+                  confidence: 95,
+                  health: s.sensor_health || 'healthy'
+                };
+                metricsAny[param] = metricObj;
+
+                // Ensure AreaCard CO2 and Ammonia cards receive MQ-135 readings if distinct sensors are absent
+                if (param === 'mq135') {
+                  if (!metricsAny.co2) metricsAny.co2 = metricObj;
+                  if (!metricsAny.ammonia) metricsAny.ammonia = metricObj;
+                }
+                // Ensure AreaCard Ethanol card receives MQ-3 readings if distinct sensor is absent
+                if (param === 'mq3') {
+                  if (!metricsAny.ethanol) metricsAny.ethanol = metricObj;
+                }
+              }
             }
           }
         }
       }
     }
 
+    // 5. Aggregate facility overview metrics from online devices
+    const onlineDevs: ESPDevice[] = [];
+    const seenOnlineIds = new Set<string>();
+
+    if (Array.isArray(remoteOverview.devices)) {
+      for (const d of remoteOverview.devices) {
+        if (d.is_online === 1 && !deletedDevices.has(d.id.toUpperCase())) {
+          seenOnlineIds.add(d.id.toUpperCase());
+          onlineDevs.push(d);
+        }
+      }
+    }
+
+    if (deviceLookup) {
+      for (const devId of Object.keys(assignments)) {
+        if (deletedDevices.has(devId) || seenOnlineIds.has(devId)) continue;
+        const liveDev = deviceLookup(devId);
+        if (liveDev && liveDev.is_online === 1) {
+          seenOnlineIds.add(devId);
+          onlineDevs.push(liveDev);
+        }
+      }
+    }
+
+    const connectedESPs = Math.max(remoteOverview.connectedESPs || 0, onlineDevs.length);
+    let avgTemp = remoteOverview.avgTemp;
+    let avgHum = remoteOverview.avgHum;
+    let co2Status = remoteOverview.co2Status;
+    let gasStatus = remoteOverview.gasStatus;
+
+    if (onlineDevs.length > 0) {
+      const temps: number[] = [];
+      const hums: number[] = [];
+      const co2s: number[] = [];
+      const gases: { nh3: number; eth: number }[] = [];
+
+      for (const d of onlineDevs) {
+        if (Array.isArray(d.sensors)) {
+          for (const s of d.sensors) {
+            const val = s.calibrated_reading ?? s.raw_reading;
+            if (val === undefined || val === null || isNaN(val)) continue;
+            if (s.sensor_type === 'temperature') temps.push(val);
+            if (s.sensor_type === 'humidity' && val > 0) hums.push(val);
+            if (s.sensor_type === 'co2') co2s.push(val);
+            if (s.sensor_type === 'ammonia') gases.push({ nh3: val, eth: 0 });
+            if (s.sensor_type === 'ethanol') gases.push({ nh3: 0, eth: val });
+          }
+        }
+      }
+
+      if (temps.length > 0) {
+        avgTemp = +(temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+      }
+      if (hums.length > 0) {
+        avgHum = Math.round(hums.reduce((a, b) => a + b, 0) / hums.length);
+      }
+      if (co2s.length > 0) {
+        const maxCo2 = Math.max(...co2s);
+        co2Status = maxCo2 > 1400 ? 'Critical' : maxCo2 > 1200 ? 'Elevated' : 'Normal';
+      }
+      if (gases.length > 0) {
+        const anyElevated = gases.some(g => g.nh3 > 4.0 || g.eth > 1.8);
+        gasStatus = anyElevated ? 'Elevated' : 'Normal';
+      }
+    }
+
     return {
       ...remoteOverview,
       areas: mergedAreas,
-      activeAreasCount: mergedAreas.length
+      activeAreasCount: mergedAreas.length,
+      connectedESPs,
+      avgTemp: avgTemp !== undefined && avgTemp !== null ? avgTemp : remoteOverview.avgTemp,
+      avgHum: avgHum !== undefined && avgHum !== null ? avgHum : remoteOverview.avgHum,
+      co2Status: co2Status || remoteOverview.co2Status || 'Normal',
+      gasStatus: gasStatus || remoteOverview.gasStatus || 'Normal'
     };
   },
 

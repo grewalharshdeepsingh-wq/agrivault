@@ -35,8 +35,10 @@ function getOrBuildSensor(
   existingSensors?: Sensor[]
 ): Sensor {
   const existing = existingSensors?.find((s) => s.sensor_type === type);
+  const nowIso = new Date().toISOString();
   if (existing && existing.calibrated_reading === val) {
-    return existing; // Preserve stable object reference
+    existing.last_reading_time = nowIso;
+    return existing; // Preserve stable object reference while keeping telemetry fresh
   }
   return {
     id: `sens-${deviceId}-${type}`,
@@ -85,6 +87,54 @@ function buildSensors(deviceId: string, areaId: string | null, raw: any, existin
   if (raw.mq135 !== undefined && raw.mq135 !== null) {
     sensors.push(getOrBuildSensor(
       deviceId, areaId, 'mq135', 'Air Quality & Respiration (MQ-135)', 'ppm', 'GPIO 34', Number(raw.mq135), existingSensors
+    ));
+  }
+
+  // Respiration & CO2 (from MQ-135 or direct co2 metric)
+  if (raw.co2 !== undefined && raw.co2 !== null) {
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'co2', 'Respiration & CO2 (MQ-135)', 'ppm', 'GPIO 34', Number(raw.co2), existingSensors
+    ));
+  } else if (raw.mq135 !== undefined && raw.mq135 !== null && Number(raw.mq135) > 0) {
+    const rawAdc = Number(raw.mq135);
+    const vOut = (rawAdc / 4095.0) * 3.3;
+    const rs = vOut > 0 && vOut < 3.3 ? ((3.3 - vOut) * 10.0) / vOut : 10.0;
+    const ratio = Math.max(0.01, rs / 35.0);
+    const co2Est = Math.min(5000, Math.max(400, Math.round(110.0 * Math.pow(ratio, -2.2) + 400.0)));
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'co2', 'Respiration & CO2 (MQ-135)', 'ppm', 'GPIO 34', co2Est, existingSensors
+    ));
+  }
+
+  // Ammonia (from MQ-135 or direct ammonia metric)
+  if (raw.ammonia !== undefined && raw.ammonia !== null) {
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'ammonia', 'Ammonia & Breakdown (MQ-135)', 'ppm', 'GPIO 34', Number(raw.ammonia), existingSensors
+    ));
+  } else if (raw.mq135 !== undefined && raw.mq135 !== null && Number(raw.mq135) > 0) {
+    const rawAdc = Number(raw.mq135);
+    const vOut = (rawAdc / 4095.0) * 3.3;
+    const rs = vOut > 0 && vOut < 3.3 ? ((3.3 - vOut) * 10.0) / vOut : 10.0;
+    const ratio = Math.max(0.01, rs / 35.0);
+    const nh3Est = Math.min(100, Math.max(0.1, +(1.02 * Math.pow(ratio, -1.8)).toFixed(2)));
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'ammonia', 'Ammonia & Breakdown (MQ-135)', 'ppm', 'GPIO 34', nh3Est, existingSensors
+    ));
+  }
+
+  // Ethanol / VOC (from MQ-3 or direct ethanol metric)
+  if (raw.ethanol !== undefined && raw.ethanol !== null) {
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'ethanol', 'Volatile Ethanol (MQ-3)', 'ppm', 'GPIO 35', Number(raw.ethanol), existingSensors
+    ));
+  } else if (raw.mq3 !== undefined && raw.mq3 !== null && Number(raw.mq3) > 0) {
+    const rawAdc = Number(raw.mq3);
+    const vOut = (rawAdc / 4095.0) * 3.3;
+    const rs = vOut > 0 && vOut < 3.3 ? ((3.3 - vOut) * 10.0) / vOut : 10.0;
+    const ratio = Math.max(0.01, rs / 20.0);
+    const ethEst = Math.min(50, Math.max(0.05, +(0.4 * Math.pow(ratio, -1.45)).toFixed(2)));
+    sensors.push(getOrBuildSensor(
+      deviceId, areaId, 'ethanol', 'Volatile Ethanol (MQ-3)', 'ppm', 'GPIO 35', ethEst, existingSensors
     ));
   }
 
@@ -144,7 +194,7 @@ export function rawToESPDevice(id: string, raw: any): ESPDevice {
     signal_rssi: raw.signal_rssi ?? raw.rssi ?? -60,
     battery_voltage: raw.battery_voltage ?? raw.battery ?? 3.3,
     is_enabled: raw.is_enabled ?? 1,
-    is_discovered: 1,
+    is_discovered: assignedAreaId ? 0 : 1,
     is_simulated: 0,
     installation_date: raw.installation_date || new Date().toISOString().split('T')[0],
     area_name: raw.area_name || null,
@@ -173,7 +223,7 @@ export function initFirebaseRealtime(): void {
         firebaseDevicesMap.set(normId, dev);
 
         // Compute stable content signature to prevent unnecessary re-render loops
-        const sig = `${normId}|${val.temperature}|${val.humidity}|${val.mq3}|${val.mq135}|${val.relayState}|${val.is_online}|${dev.area_id}|${val.userName || val.user_name}`;
+        const sig = `${normId}|${val.temperature}|${val.humidity}|${val.mq3}|${val.mq135}|${val.co2}|${val.ammonia}|${val.relayState}|${val.is_online}|${dev.area_id}|${val.userName || val.user_name}`;
         const prevSig = lastDeviceSignatures.get(normId);
 
         // 1. Emit discovery ONLY once per device

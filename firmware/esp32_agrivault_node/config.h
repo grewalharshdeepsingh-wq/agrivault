@@ -13,8 +13,11 @@ struct SensorData {
   float humidity;
   int mq3Raw;
   float mq3Ratio;
+  float mq3EthanolPpm;
   int mq135Raw;
   float mq135Ratio;
+  float co2Ppm;
+  float ammoniaPpm;
 };
 
 #define FIRMWARE_VERSION       "v2.5.0-firebase"

@@ -486,6 +486,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 const is8266Node = (d.hardware_type || '').includes('8266') || d.id.includes('8266');
                 const tempVal = d.sensors?.find((s: any) => s.sensor_type === 'temperature')?.calibrated_reading;
                 const humVal = d.sensors?.find((s: any) => s.sensor_type === 'humidity')?.calibrated_reading;
+                const co2Val = d.sensors?.find((s: any) => s.sensor_type === 'co2')?.calibrated_reading;
+                const nh3Val = d.sensors?.find((s: any) => s.sensor_type === 'ammonia')?.calibrated_reading;
+                const mq135Val = d.sensors?.find((s: any) => s.sensor_type === 'mq135')?.calibrated_reading;
 
                 return (
                   <div
@@ -509,6 +512,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         )}
                         {humVal !== undefined && humVal !== null && (
                           <span className="text-sky-400 font-semibold">• {humVal}%</span>
+                        )}
+                        {co2Val !== undefined && co2Val !== null && (
+                          <span className="text-emerald-400 font-semibold">• CO2: {Math.round(co2Val)} ppm</span>
+                        )}
+                        {nh3Val !== undefined && nh3Val !== null && (
+                          <span className="text-amber-400 font-semibold">• NH3: {nh3Val} ppm</span>
+                        )}
+                        {co2Val === undefined && mq135Val !== undefined && mq135Val !== null && (
+                          <span className="text-amber-400 font-semibold">• Air/MQ135: {mq135Val}</span>
                         )}
                       </div>
                     </div>
@@ -686,8 +698,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <th className="py-2.5 px-3">Zone & Rack</th>
                   <th className="py-2.5 px-3">Temperature</th>
                   <th className="py-2.5 px-3">Humidity</th>
-                  <th className="py-2.5 px-3">MQ3 Gas</th>
-                  <th className="py-2.5 px-3">MQ135 Gas</th>
+                  <th className="py-2.5 px-3">MQ3 (Ethanol)</th>
+                  <th className="py-2.5 px-3">MQ135 (CO2 / NH3)</th>
                   <th className="py-2.5 px-3">Status</th>
                   <th className="py-2.5 px-3">Signal</th>
                   <th className="py-2.5 px-3 text-right">Actions</th>
@@ -715,8 +727,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   .map((d) => {
                     const temp = d.sensors?.find((s) => s.sensor_type === 'temperature')?.calibrated_reading;
                     const hum = d.sensors?.find((s) => s.sensor_type === 'humidity')?.calibrated_reading;
-                    const mq3 = d.sensors?.find((s) => s.sensor_type === 'mq3' || s.sensor_type === 'ethanol')?.calibrated_reading;
-                    const mq135 = d.sensors?.find((s) => s.sensor_type === 'mq135' || s.sensor_type === 'ammonia')?.calibrated_reading;
+                    const mq3 = d.sensors?.find((s) => s.sensor_type === 'ethanol' || s.sensor_type === 'mq3')?.calibrated_reading;
+                    const co2 = d.sensors?.find((s) => s.sensor_type === 'co2')?.calibrated_reading;
+                    const nh3 = d.sensors?.find((s) => s.sensor_type === 'ammonia')?.calibrated_reading;
+                    const mq135 = d.sensors?.find((s) => s.sensor_type === 'mq135')?.calibrated_reading;
                     const isPending = d.registration_status === 'pending';
 
                     return (
@@ -772,9 +786,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                           )}
                         </td>
                         <td className="py-2.5 px-3 font-mono text-xs">
-                          {mq135 !== undefined && d.is_online === 1 ? (
+                          {co2 !== undefined && d.is_online === 1 ? (
+                            <div>
+                              <span className={co2 > 1200 ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
+                                {Math.round(co2)} ppm
+                              </span>
+                              {nh3 !== undefined && (
+                                <span className="block text-[10px] text-amber-300/80 font-normal">NH3: {nh3.toFixed(2)} ppm</span>
+                              )}
+                            </div>
+                          ) : mq135 !== undefined && d.is_online === 1 ? (
                             <span className={mq135 > 50 ? 'text-amber-400 font-bold' : 'text-vault-300'}>
-                              {mq135.toFixed(1)} ppm
+                              {mq135.toFixed(1)}
                             </span>
                           ) : (
                             <span className="text-vault-500">--</span>

@@ -102,7 +102,61 @@ export const api = {
       return stateMesh.getRooms();
     }
   },
-  getArea: (id: string) => request<any>(`/areas/${id}`),
+  getArea: async (id: string) => {
+    initFirebaseRealtime();
+    let res: any = null;
+    try {
+      res = await request<any>(`/areas/${id}`);
+    } catch {
+      const rooms = stateMesh.getRooms();
+      const match = rooms.find(r => r.id === id);
+      res = {
+        area: match || { id, name: 'Cold Room', commodity: 'General Produce', health_status: 'normal', health_score: 100 },
+        devices: [],
+        sensors: [],
+        alerts: [],
+        relays: [],
+        events: [],
+        storageInsights: []
+      };
+    }
+
+    // Enrich with live Firebase devices and sensors for this area
+    const fbDevices = getFirebaseDevices();
+    const assignments = stateMesh.getAssignments();
+    const assignedDevs = fbDevices.filter(d => (assignments[d.id.toUpperCase()] === id) || (d.area_id === id));
+
+    if (assignedDevs.length > 0) {
+      if (!res.devices) res.devices = [];
+      const devMap = new Map<string, any>();
+      for (const d of res.devices) {
+        devMap.set(d.id.toUpperCase(), d);
+      }
+      for (const d of assignedDevs) {
+        const existing = devMap.get(d.id.toUpperCase());
+        devMap.set(d.id.toUpperCase(), existing ? { ...existing, ...d } : d);
+      }
+      res.devices = Array.from(devMap.values());
+
+      // Merge sensors
+      const sensorMap = new Map<string, any>();
+      if (Array.isArray(res.sensors)) {
+        for (const s of res.sensors) {
+          sensorMap.set(s.sensor_type, s);
+        }
+      }
+      for (const d of assignedDevs) {
+        if (Array.isArray(d.sensors)) {
+          for (const s of d.sensors) {
+            sensorMap.set(s.sensor_type, s);
+          }
+        }
+      }
+      res.sensors = Array.from(sensorMap.values());
+    }
+
+    return res;
+  },
   updateArea: async (id: string, data: { name?: string; commodity?: string }) => {
     stateMesh.recordRoomUpdated(id, data);
     return request<any>(`/areas/${id}`, { method: 'PUT', body: JSON.stringify(data) });
@@ -174,7 +228,34 @@ export const api = {
     }
     return Array.from(map.values());
   },
-  getDevice: (id: string) => request<any>(`/devices/${id}`),
+  getDevice: async (id: string) => {
+    initFirebaseRealtime();
+    const normId = id.trim().toUpperCase();
+    let backendDev: any = null;
+    try {
+      backendDev = await request<any>(`/devices/${id}`);
+    } catch {
+      // Backend didn't have it
+    }
+
+    const fbDevices = getFirebaseDevices();
+    const fbMatch = fbDevices.find(d => d.id.toUpperCase() === normId);
+
+    if (backendDev && fbMatch) {
+      return { ...backendDev, ...fbMatch, sensors: fbMatch.sensors?.length ? fbMatch.sensors : backendDev.sensors };
+    }
+    if (fbMatch) {
+      return {
+        ...fbMatch,
+        recentReadings: [],
+        activeAlerts: []
+      };
+    }
+    if (backendDev) {
+      return backendDev;
+    }
+    throw new Error(`Device ${id} not found`);
+  },
   updateDevice: async (id: string, data: any) => {
     if (data.areaId) {
       stateMesh.recordDeviceAssigned(id, data.areaId);
