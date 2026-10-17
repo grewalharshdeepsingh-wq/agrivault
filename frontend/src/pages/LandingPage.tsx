@@ -16,13 +16,11 @@ import {
 
 interface LandingPageProps {
   onEnterApp: () => void;
-  onNavigateToAuth: () => void;
   onNavigateToProvisioning: () => void;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onEnterApp,
-  onNavigateToAuth,
   onNavigateToProvisioning
 }) => {
   return (
@@ -61,14 +59,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             >
               <Cpu className="w-4 h-4 text-agri-400" />
               <span>Connect ESP32 Device</span>
-            </button>
-
-            <button
-              onClick={onNavigateToAuth}
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-lg bg-vault-850 hover:bg-vault-750 text-slate-300 font-medium text-sm transition-all"
-            >
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>Operator Authentication</span>
             </button>
           </div>
         </div>

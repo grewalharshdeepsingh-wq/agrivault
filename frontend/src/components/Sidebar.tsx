@@ -17,16 +17,13 @@ import {
   QrCode,
   Users,
   HelpCircle,
-  ShieldCheck,
   Home
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export type NavTab =
   | 'landing'
-  | 'auth'
   | 'dashboard'
-  | 'facilities'
   | 'areas'
   | 'devices'
   | 'gateways'
@@ -73,10 +70,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
       title: 'Facility Operations',
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'facilities', label: 'Facilities', icon: Building2 },
         { id: 'areas', label: 'Storage Zones', icon: Layers, count: overview?.activeAreasCount },
-        { id: 'landing', label: 'Platform Portal', icon: Home },
-        { id: 'auth', label: 'Access & Roles', icon: ShieldCheck }
+        { id: 'landing', label: 'Platform Portal', icon: Home }
       ]
     },
     {

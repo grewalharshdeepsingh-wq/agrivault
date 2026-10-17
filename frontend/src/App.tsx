@@ -6,11 +6,9 @@ import { MobileNav } from './components/MobileNav';
 import { AlertBanner } from './components/AlertBanner';
 import { OnboardingWizard } from './components/OnboardingWizard';
 
-// 20 Complete Application Pages
+// 18 Complete Application Pages
 import { LandingPage } from './pages/LandingPage';
-import { AuthPage } from './pages/AuthPage';
 import { Dashboard } from './pages/Dashboard';
-import { FacilitiesPage } from './pages/FacilitiesPage';
 import { StorageZonesPage } from './pages/StorageZonesPage';
 import { AreaDetail } from './pages/AreaDetail';
 import { DevicesPage } from './pages/DevicesPage';
@@ -46,10 +44,8 @@ import {
   QrCode,
   Users,
   HelpCircle,
-  Building2,
   Radio,
-  Home,
-  ShieldCheck
+  Home
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -111,18 +107,13 @@ export const App: React.FC = () => {
                 onSelectDevice={handleSelectDevice}
               />
             ) : (
-              /* 20 Core Application Pages */
+              /* 18 Core Application Pages */
               <>
                 {currentTab === 'landing' && (
                   <LandingPage
                     onEnterApp={() => handleTabChange('dashboard')}
-                    onNavigateToAuth={() => handleTabChange('auth')}
                     onNavigateToProvisioning={() => handleTabChange('provisioning')}
                   />
-                )}
-
-                {currentTab === 'auth' && (
-                  <AuthPage onSuccess={() => handleTabChange('dashboard')} />
                 )}
 
                 {currentTab === 'dashboard' && (
@@ -133,8 +124,6 @@ export const App: React.FC = () => {
                     onNavigateToSimulation={() => handleTabChange('simulation')}
                   />
                 )}
-
-                {currentTab === 'facilities' && <FacilitiesPage />}
 
                 {currentTab === 'areas' && (
                   <StorageZonesPage
@@ -203,7 +192,6 @@ export const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               {[
                 { id: 'dashboard', label: 'Dashboard', icon: Home },
-                { id: 'facilities', label: 'Facilities', icon: Building2 },
                 { id: 'areas', label: 'Storage Zones', icon: Layers },
                 { id: 'devices', label: 'Sensor Nodes', icon: Cpu },
                 { id: 'gateways', label: 'Central Gateways', icon: Server },
@@ -220,8 +208,7 @@ export const App: React.FC = () => {
                 { id: 'users', label: 'User Roles & RBAC', icon: Users },
                 { id: 'settings', label: 'System Settings', icon: Settings },
                 { id: 'help', label: 'Help & Wiring Guide', icon: HelpCircle },
-                { id: 'simulation', label: 'Simulation Lab', icon: Sliders },
-                { id: 'auth', label: 'Login & Session', icon: ShieldCheck }
+                { id: 'simulation', label: 'Simulation Lab', icon: Sliders }
               ].map((item) => {
                 const Icon = item.icon;
                 return (
