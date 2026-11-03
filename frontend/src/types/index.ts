@@ -168,6 +168,7 @@ export interface ESPDevice {
   is_enabled: number;
   is_discovered: number;
   is_simulated?: number;
+  food_type?: string;
   installation_date: string;
   area_name?: string;
   sensors?: Sensor[];

@@ -14,10 +14,15 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
-  Globe
+  Globe,
+  Plus,
+  Trash2,
+  Cpu
 } from 'lucide-react';
 import { api } from '../api/client';
 import { wsManager } from '../api/websocket';
+import { stateMesh, FakeEspDefinition } from '../api/stateMesh';
+import { getAllFoodProfiles, getFoodProfile } from '../api/foodProfiles';
 import { RemoteTelemetryConfig, getRemoteTelemetryConfig, setRemoteTelemetryConfig } from '../api/firebase';
 
 interface Preset {
@@ -114,6 +119,10 @@ export const RemoteControlPage: React.FC = () => {
   const [isApplying, setIsApplying] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [autoApply, setAutoApply] = useState(true);
+  const [fakeEsps, setFakeEsps] = useState<FakeEspDefinition[]>(stateMesh.getFakeEsps());
+  const [newFakeName, setNewFakeName] = useState('');
+  const [newFakeFood, setNewFakeFood] = useState('apple');
+  const [showAddFake, setShowAddFake] = useState(false);
   const [livePreview, setLivePreview] = useState<{
     temperature: number;
     co2: number;
@@ -558,6 +567,195 @@ export const RemoteControlPage: React.FC = () => {
               <span>0.24 ppm (High Rot)</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Fleet Diversity & Food Commodity Section */}
+      <div className="bg-vault-900 border border-vault-800 rounded-2xl p-5 lg:p-6 shadow-xl space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-vault-800 pb-3">
+          <div>
+            <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
+              <Cpu className="w-4 h-4 text-emerald-400" />
+              <span>Fleet Diversification: Online ESPs & Cloned Food Nodes</span>
+            </h2>
+            <p className="text-xs text-vault-400">
+              The online ESP32 remains connected. You can clone similar fake ESPs that oscillate near baseline (~19°C / 55 CO₂) with customized food types.
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              setNewFakeName(`Storage Node ${fakeEsps.length + 1}`);
+              setNewFakeFood('apple');
+              setShowAddFake(!showAddFake);
+            }}
+            className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 shadow transition shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Clone Fake ESP</span>
+          </button>
+        </div>
+
+        {/* Quick Add Form */}
+        {showAddFake && (
+          <div className="bg-vault-950 p-4 rounded-xl border border-emerald-500/40 space-y-3">
+            <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+              <span>Deploy New Cloned Food Node</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div>
+                <label className="block text-vault-400 mb-1 font-semibold">Node Name</label>
+                <input
+                  type="text"
+                  value={newFakeName}
+                  onChange={(e) => setNewFakeName(e.target.value)}
+                  className="w-full bg-vault-900 border border-vault-700 rounded-lg p-2 text-white text-xs"
+                  placeholder="e.g. Apples Vault Node"
+                />
+              </div>
+              <div>
+                <label className="block text-vault-400 mb-1 font-semibold">Food Stored</label>
+                <select
+                  value={newFakeFood}
+                  onChange={(e) => setNewFakeFood(e.target.value)}
+                  className="w-full bg-vault-900 border border-vault-700 rounded-lg p-2 text-white text-xs"
+                >
+                  {getAllFoodProfiles().map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.icon} {f.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end gap-2">
+                <button
+                  onClick={async () => {
+                    const id = `AGR-ESP-SIM-${String(fakeEsps.length + 1).padStart(2, '0')}`;
+                    await api.createFakeEsp({
+                      id,
+                      name: newFakeName.trim() || `Cloned Node (${id.slice(-4)})`,
+                      hardwareType: 'ESP32',
+                      foodType: newFakeFood,
+                      zoneName: `${getFoodProfile(newFakeFood).name.split(' ')[0]} Storage Vault`,
+                      createdAt: new Date().toISOString()
+                    });
+                    setFakeEsps(stateMesh.getFakeEsps());
+                    setShowAddFake(false);
+                    setFeedbackMsg(`Fake node "${id}" deployed with commodity ${getFoodProfile(newFakeFood).name}.`);
+                    setTimeout(() => setFeedbackMsg(null), 3000);
+                  }}
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow"
+                >
+                  Deploy Node
+                </button>
+                <button
+                  onClick={() => setShowAddFake(false)}
+                  className="px-3 py-2 bg-vault-800 hover:bg-vault-700 text-vault-400 rounded-lg text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fleet Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Online Real ESP */}
+          <div className="bg-vault-950 p-3.5 rounded-xl border border-vault-700 shadow flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span className="text-xs font-bold text-white">AGR-ESP-89D520</span>
+                </div>
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
+                  Online Hardware
+                </span>
+              </div>
+              <p className="text-[11px] text-vault-400 mb-2">Physical ESP32 node connected via Firebase Cloud stream.</p>
+              <div className="p-2 rounded bg-vault-900 border border-vault-800 text-xs flex items-center justify-between">
+                <span className="text-vault-400">Commodity:</span>
+                <span className="font-bold text-slate-200">🥔 Potatoes (Bulk Store)</span>
+              </div>
+            </div>
+            <div className="pt-2 mt-2 border-t border-vault-800 text-[10px] font-mono text-emerald-400 flex justify-between">
+              <span>Live: {livePreview.temperature}°C</span>
+              <span>CO2: {livePreview.co2} ppm</span>
+              <span>Cycle: 60s Sine</span>
+            </div>
+          </div>
+
+          {/* Fake ESPs */}
+          {fakeEsps.map((f, idx) => {
+            const prof = getFoodProfile(f.foodType);
+            const tSec = Date.now() / 1000;
+            const phi = prof.phaseOffset + idx * 0.7;
+            const liveTemp = +(prof.baseTemp + 0.65 * Math.sin((tSec * 2 * Math.PI) / 60 + phi)).toFixed(1);
+            const liveCo2 = Math.round(prof.baseCo2 + 3.2 * Math.sin((tSec * 2 * Math.PI) / 45 + 1.0 + phi));
+
+            return (
+              <div
+                key={f.id}
+                className="bg-vault-950 p-3.5 rounded-xl border border-vault-700 shadow flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-teal-400"></span>
+                      <span className="text-xs font-bold text-white truncate">{f.name}</span>
+                    </div>
+                    <span className="text-[10px] bg-teal-500/20 text-teal-300 border border-teal-500/40 px-1.5 py-0.5 rounded-full font-bold">
+                      Simulated Clone
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded bg-vault-900 border border-vault-800 text-xs space-y-1.5 mb-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-vault-400">Food Stored:</span>
+                      <span className="font-bold text-white">{prof.icon} {prof.name.split(' ')[0]}</span>
+                    </div>
+
+                    <div className="pt-1 border-t border-vault-800 flex items-center justify-between gap-1">
+                      <span className="text-[10px] text-vault-400">Switch Food:</span>
+                      <select
+                        value={f.foodType || 'potato'}
+                        onChange={async (e) => {
+                          await api.updateFakeEspFood(f.id, e.target.value);
+                          setFakeEsps(stateMesh.getFakeEsps());
+                          setFeedbackMsg(`Food for "${f.id}" switched to ${getFoodProfile(e.target.value).name}.`);
+                          setTimeout(() => setFeedbackMsg(null), 3000);
+                        }}
+                        className="bg-vault-950 border border-vault-700 text-emerald-300 text-[11px] rounded px-1.5 py-0.5"
+                      >
+                        {getAllFoodProfiles().map((fp) => (
+                          <option key={fp.id} value={fp.id}>
+                            {fp.icon} {fp.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 mt-2 border-t border-vault-800 text-[10px] font-mono text-teal-300 flex items-center justify-between">
+                  <span>{liveTemp}°C • {liveCo2} ppm</span>
+                  <button
+                    onClick={async () => {
+                      if (confirm(`Remove fake ESP "${f.name}" (${f.id})?`)) {
+                        await api.deleteFakeEsp(f.id);
+                        setFakeEsps(stateMesh.getFakeEsps());
+                      }
+                    }}
+                    className="text-vault-500 hover:text-rose-400 p-1 rounded"
+                    title="Delete Fake Node"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

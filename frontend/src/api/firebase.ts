@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase, ref, onValue, update, set, remove } from 'firebase/database';
 import { ESPDevice, Sensor } from '../types';
 import { wsManager } from './websocket';
-import { stateMesh, registerDeviceLookup } from './stateMesh';
+import { stateMesh, registerDeviceLookup, getMeshDevice, FakeEspDefinition } from './stateMesh';
 
 export const firebaseConfig = {
   apiKey: "AIzaSyDCz56EoH_SDzdQA8iEENOM00b3sSsyG4Y",
@@ -277,6 +277,16 @@ function startWatchdog(): void {
       dev.last_heartbeat = new Date().toISOString();
       wsManager.emit('device_updated', dev);
     }
+
+    // Also pulse live cycling updates for diversified fake ESP nodes
+    const fakeEsps = stateMesh.getFakeEsps();
+    for (const fake of fakeEsps) {
+      const cleanId = fake.id.toUpperCase();
+      const dev = getMeshDevice(cleanId);
+      if (dev) {
+        wsManager.emit('device_updated', dev);
+      }
+    }
     wsManager.emit('telemetry_update', {});
   }, 2000);
 }
@@ -388,6 +398,28 @@ export function initFirebaseRealtime(): void {
       console.warn('[Firebase RTDB] Remote config listen error:', error);
     });
 
+    // Synchronize fake ESP fleet across clients
+    const fakeEspsRef = ref(firebaseDb, 'fake_esps');
+    onValue(fakeEspsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (!data || typeof data !== 'object') return;
+      Object.entries(data).forEach(([key, val]: [string, any]) => {
+        if (!val || typeof val !== 'object') return;
+        stateMesh.saveFakeEsp({
+          id: key || val.id,
+          name: val.name,
+          hardwareType: val.hardwareType || 'ESP32',
+          foodType: val.foodType || 'potato',
+          areaId: val.areaId,
+          zoneName: val.zoneName,
+          createdAt: val.createdAt
+        });
+      });
+      wsManager.emit('devices_synced', {});
+    }, (error) => {
+      console.warn('[Firebase RTDB] Fake ESPs listen error:', error);
+    });
+
     console.log('[AgriVault] Firebase Realtime Database listener active for Asia-Southeast1 cluster.');
   } catch (err) {
     console.error('[Firebase RTDB] Init error:', err);
@@ -462,4 +494,50 @@ export async function deleteFirebaseRoom(roomId: string): Promise<void> {
   } catch (e) {
     console.warn('[Firebase RTDB] Delete room error:', e);
   }
+}
+
+export async function saveFirebaseFakeEsp(def: FakeEspDefinition): Promise<void> {
+  const cleanId = def.id.trim().toUpperCase();
+  stateMesh.saveFakeEsp(def);
+  try {
+    const fakeRef = ref(firebaseDb, `fake_esps/${cleanId}`);
+    await set(fakeRef, {
+      ...def,
+      id: cleanId,
+      updatedAt: Date.now()
+    });
+  } catch (err) {
+    console.warn('[Firebase RTDB] Error saving fake esp:', err);
+  }
+  const dev = getMeshDevice(cleanId);
+  if (dev) {
+    wsManager.emit('device_updated', dev);
+  }
+}
+
+export async function updateFirebaseFakeEspFood(id: string, foodType: string): Promise<void> {
+  const cleanId = id.trim().toUpperCase();
+  stateMesh.updateFakeEspFoodType(cleanId, foodType);
+  try {
+    const fakeRef = ref(firebaseDb, `fake_esps/${cleanId}`);
+    await update(fakeRef, { foodType, updatedAt: Date.now() });
+  } catch (err) {
+    console.warn('[Firebase RTDB] Error updating fake esp food:', err);
+  }
+  const dev = getMeshDevice(cleanId);
+  if (dev) {
+    wsManager.emit('device_updated', dev);
+  }
+}
+
+export async function deleteFirebaseFakeEsp(id: string): Promise<void> {
+  const cleanId = id.trim().toUpperCase();
+  stateMesh.deleteFakeEsp(cleanId);
+  try {
+    const fakeRef = ref(firebaseDb, `fake_esps/${cleanId}`);
+    await remove(fakeRef);
+  } catch (err) {
+    console.warn('[Firebase RTDB] Error deleting fake esp:', err);
+  }
+  wsManager.emit('device_deleted', { deviceId: cleanId });
 }

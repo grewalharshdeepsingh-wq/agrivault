@@ -1,4 +1,15 @@
 import { Area, ESPDevice } from '../types';
+import { buildFakeSensors, getFoodProfile } from './foodProfiles';
+
+export interface FakeEspDefinition {
+  id: string;
+  name: string;
+  hardwareType: 'ESP32' | 'ESP8266';
+  foodType: string;
+  areaId?: string;
+  zoneName?: string;
+  createdAt?: string;
+}
 
 export interface MeshRoom {
   id: string;
@@ -13,12 +24,14 @@ export interface StateMeshPayload {
   assignments: Record<string, string>; // deviceId (uppercase) -> areaId
   deletedRooms: string[];
   deletedDevices: string[];
+  fakeEsps?: FakeEspDefinition[];
 }
 
 const STORAGE_KEY_ROOMS = 'agrivault_mesh_rooms_v1';
 const STORAGE_KEY_ASSIGNMENTS = 'agrivault_mesh_assignments_v1';
 const STORAGE_KEY_DELETED_ROOMS = 'agrivault_mesh_deleted_rooms_v1';
 const STORAGE_KEY_DELETED_DEVICES = 'agrivault_mesh_deleted_devices_v1';
+const STORAGE_KEY_FAKE_ESPS = 'agrivault_mesh_fake_esps_v1';
 
 function safeGetJson<T>(key: string, fallback: T): T {
   try {
@@ -43,6 +56,46 @@ export function registerDeviceLookup(fn: (id: string) => ESPDevice | undefined) 
   deviceLookup = fn;
 }
 
+export function getMeshDevice(id: string): ESPDevice | undefined {
+  const cleanId = id.trim().toUpperCase();
+  if (deviceLookup) {
+    const d = deviceLookup(cleanId);
+    if (d) return d;
+  }
+  const fake = stateMesh.getFakeEsps().find(e => e.id.toUpperCase() === cleanId);
+  if (fake) {
+    const assignments = stateMesh.getAssignments();
+    const assignedAreaId = assignments[cleanId] || fake.areaId || null;
+    return {
+      id: cleanId,
+      hardware_id: `24:0A:C4:SIM:${cleanId.slice(-4).padStart(4, '0')}`,
+      device_code: cleanId,
+      device_type: 'SENSOR_NODE',
+      registration_status: 'active',
+      facility_id: 'fac-01',
+      cold_store_name: 'Cold Store A',
+      zone_name: fake.zoneName || 'Diversified Storage Vault',
+      area_id: assignedAreaId,
+      user_name: fake.name,
+      hardware_type: fake.hardwareType === 'ESP8266' ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1',
+      firmware_version: 'v2.5.0-virtual',
+      ip_address: '192.168.1.155',
+      mac_address: `24:0A:C4:SIM:${cleanId.slice(-4).padStart(4, '0')}`,
+      is_online: 1,
+      last_heartbeat: new Date().toISOString(),
+      signal_rssi: -55,
+      battery_voltage: 3.3,
+      is_enabled: 1,
+      is_discovered: 0,
+      is_simulated: 1,
+      food_type: fake.foodType,
+      installation_date: fake.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+      sensors: buildFakeSensors(cleanId, assignedAreaId, fake.foodType)
+    };
+  }
+  return undefined;
+}
+
 export const stateMesh = {
   getRooms(): MeshRoom[] {
     return safeGetJson<MeshRoom[]>(STORAGE_KEY_ROOMS, []);
@@ -58,6 +111,70 @@ export const stateMesh = {
 
   getDeletedDevices(): string[] {
     return safeGetJson<string[]>(STORAGE_KEY_DELETED_DEVICES, []);
+  },
+
+  getFakeEsps(): FakeEspDefinition[] {
+    return safeGetJson<FakeEspDefinition[]>(STORAGE_KEY_FAKE_ESPS, [
+      {
+        id: 'AGR-ESP-SIM-APPLES',
+        name: 'Apple Vault Node 1',
+        hardwareType: 'ESP32',
+        foodType: 'apple',
+        areaId: 'area-apples-01',
+        zoneName: 'Apples Cold Holding',
+        createdAt: '2026-11-03T00:00:00.000Z'
+      },
+      {
+        id: 'AGR-ESP-SIM-ONIONS',
+        name: 'Onions Dry Silo Node',
+        hardwareType: 'ESP8266',
+        foodType: 'onion',
+        areaId: 'area-onions-01',
+        zoneName: 'Onions Cured Storage',
+        createdAt: '2026-11-03T00:00:00.000Z'
+      }
+    ]);
+  },
+
+  saveFakeEsp(def: FakeEspDefinition): void {
+    const list = this.getFakeEsps();
+    const cleanId = def.id.trim().toUpperCase();
+    const idx = list.findIndex(e => e.id.toUpperCase() === cleanId);
+    const item: FakeEspDefinition = {
+      ...def,
+      id: cleanId,
+      name: def.name.trim() || `Fake ESP Node (${cleanId.slice(-4)})`,
+      hardwareType: def.hardwareType || 'ESP32',
+      foodType: def.foodType || 'potato',
+      createdAt: def.createdAt || new Date().toISOString()
+    };
+    if (idx >= 0) {
+      list[idx] = item;
+    } else {
+      list.push(item);
+    }
+    safeSetJson(STORAGE_KEY_FAKE_ESPS, list);
+
+    if (def.areaId) {
+      this.recordDeviceAssigned(cleanId, def.areaId);
+    }
+  },
+
+  updateFakeEspFoodType(id: string, foodType: string): void {
+    const list = this.getFakeEsps();
+    const cleanId = id.trim().toUpperCase();
+    const item = list.find(e => e.id.toUpperCase() === cleanId);
+    if (item) {
+      item.foodType = foodType;
+      safeSetJson(STORAGE_KEY_FAKE_ESPS, list);
+    }
+  },
+
+  deleteFakeEsp(id: string): void {
+    const cleanId = id.trim().toUpperCase();
+    const list = this.getFakeEsps().filter(e => e.id.toUpperCase() !== cleanId);
+    safeSetJson(STORAGE_KEY_FAKE_ESPS, list);
+    this.recordDeviceDeleted(cleanId);
   },
 
   recordRoomCreated(room: Area, deviceIds: string[] = []): void {
@@ -245,7 +362,7 @@ export const stateMesh = {
       const targetArea = mergedAreas.find(a => a.id === areaId);
       if (targetArea) {
         if (!targetArea.devices) targetArea.devices = [];
-        const liveDev = deviceLookup ? deviceLookup(devId) : undefined;
+        const liveDev = getMeshDevice(devId);
         const devIdx = targetArea.devices.findIndex((d: any) => d.id.toUpperCase() === devId);
         if (devIdx === -1) {
           targetArea.devices.push(liveDev || ({
@@ -340,16 +457,25 @@ export const stateMesh = {
       }
     }
 
-    if (deviceLookup) {
-      for (const devId of Object.keys(assignments)) {
-        const cleanId = devId.toUpperCase();
-        if (cleanId === 'AGR-ESP-000000' || cleanId.endsWith('000000')) continue;
-        if (deletedDevices.has(cleanId) || seenOnlineIds.has(cleanId)) continue;
-        const liveDev = deviceLookup(cleanId);
-        if (liveDev) {
-          seenOnlineIds.add(cleanId);
-          onlineDevs.push({ ...liveDev, is_online: 1 });
-        }
+    for (const devId of Object.keys(assignments)) {
+      const cleanId = devId.toUpperCase();
+      if (cleanId === 'AGR-ESP-000000' || cleanId.endsWith('000000')) continue;
+      if (deletedDevices.has(cleanId) || seenOnlineIds.has(cleanId)) continue;
+      const liveDev = getMeshDevice(cleanId);
+      if (liveDev) {
+        seenOnlineIds.add(cleanId);
+        onlineDevs.push({ ...liveDev, is_online: 1 });
+      }
+    }
+
+    // Include fake diversified ESPs in online aggregate
+    for (const fake of this.getFakeEsps()) {
+      const cleanId = fake.id.toUpperCase();
+      if (deletedDevices.has(cleanId) || seenOnlineIds.has(cleanId)) continue;
+      seenOnlineIds.add(cleanId);
+      const fakeDev = getMeshDevice(cleanId);
+      if (fakeDev) {
+        onlineDevs.push(fakeDev);
       }
     }
 
@@ -454,6 +580,47 @@ export const stateMesh = {
           is_discovered: isOnline ? 1 : 0
         });
       }
+    }
+
+    // Merge fake diversified ESPs with food types and cycling telemetry
+    const fakeEsps = this.getFakeEsps();
+    let fakeIdx = 0;
+    for (const fake of fakeEsps) {
+      const cleanId = fake.id.trim().toUpperCase();
+      if (deletedDevices.has(cleanId) || seenIds.has(cleanId)) continue;
+      seenIds.add(cleanId);
+      fakeIdx++;
+
+      const assignedAreaId = assignments[cleanId] || fake.areaId || null;
+      const sensors = buildFakeSensors(cleanId, assignedAreaId, fake.foodType, fakeIdx * 0.7);
+
+      result.push({
+        id: cleanId,
+        hardware_id: `24:0A:C4:SIM:${cleanId.slice(-4).padStart(4, '0')}`,
+        device_code: cleanId,
+        device_type: 'SENSOR_NODE',
+        registration_status: 'active',
+        facility_id: 'fac-01',
+        cold_store_name: 'Cold Store A',
+        zone_name: fake.zoneName || 'Diversified Storage Vault',
+        area_id: assignedAreaId,
+        area_name: assignedAreaId ? (roomNameMap.get(assignedAreaId) || fake.zoneName || 'Assigned Room') : undefined,
+        user_name: fake.name,
+        hardware_type: fake.hardwareType === 'ESP8266' ? 'ESP8266-NodeMCU' : 'ESP32-DevKit-V1',
+        firmware_version: 'v2.5.0-virtual',
+        ip_address: `192.168.1.${150 + fakeIdx}`,
+        mac_address: `24:0A:C4:SIM:${cleanId.slice(-4).padStart(4, '0')}`,
+        is_online: 1,
+        last_heartbeat: new Date().toISOString(),
+        signal_rssi: -55 + (fakeIdx % 5),
+        battery_voltage: 3.3,
+        is_enabled: 1,
+        is_discovered: assignedAreaId ? 0 : 1,
+        is_simulated: 1,
+        food_type: fake.foodType,
+        installation_date: fake.createdAt?.split('T')[0] || new Date().toISOString().split('T')[0],
+        sensors
+      });
     }
 
     return result;

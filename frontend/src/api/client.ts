@@ -1,4 +1,4 @@
-import { stateMesh } from './stateMesh';
+import { stateMesh, FakeEspDefinition } from './stateMesh';
 import {
   getFirebaseDevices,
   initFirebaseRealtime,
@@ -7,7 +7,10 @@ import {
   updateFirebaseDevice,
   getRemoteTelemetryConfig,
   setRemoteTelemetryConfig,
-  RemoteTelemetryConfig
+  RemoteTelemetryConfig,
+  saveFirebaseFakeEsp,
+  updateFirebaseFakeEspFood,
+  deleteFirebaseFakeEsp
 } from './firebase';
 
 const API_BASE = '/api';
@@ -346,6 +349,20 @@ export const api = {
     request<any>(`/devices/${id}/reject`, { method: 'POST' }),
   revokeDevice: (id: string) =>
     request<any>(`/devices/${id}/revoke`, { method: 'POST' }),
+
+  // Diversified Fake ESPs
+  createFakeEsp: async (def: FakeEspDefinition) => {
+    await saveFirebaseFakeEsp(def);
+    return { success: true, device: def };
+  },
+  updateFakeEspFood: async (id: string, foodType: string) => {
+    await updateFirebaseFakeEspFood(id, foodType);
+    return { success: true, id, foodType };
+  },
+  deleteFakeEsp: async (id: string) => {
+    await deleteFirebaseFakeEsp(id);
+    return { success: true, id };
+  },
 
   // Gateways & Hardware Topology
   getGateways: () => request<any[]>('/gateways'),

@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { stateMesh } from '../api/stateMesh';
 import { wsManager } from '../api/websocket';
+import { getAllFoodProfiles, getFoodProfile } from '../api/foodProfiles';
 import {
   Cpu,
   Globe,
@@ -48,6 +49,15 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
 
   // Configuration Modal State
   const [configuringDevice, setConfiguringDevice] = useState<ESPDevice | null>(null);
+
+  // Fake / Diversified ESP Modal State
+  const [showCreateFakeModal, setShowCreateFakeModal] = useState(false);
+  const [newFakeId, setNewFakeId] = useState('');
+  const [newFakeName, setNewFakeName] = useState('');
+  const [newFakeFood, setNewFakeFood] = useState('apple');
+  const [newFakeHw, setNewFakeHw] = useState<'ESP32' | 'ESP8266'>('ESP32');
+  const [newFakeAreaId, setNewFakeAreaId] = useState('');
+  const [isCreatingFake, setIsCreatingFake] = useState(false);
 
   const canEdit = role === 'Owner' || role === 'Admin' || role === 'Operator';
 
@@ -243,6 +253,24 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
           >
             <HelpCircle className="w-3.5 h-3.5 text-agri-400" />
             <span>Internet Setup Guide</span>
+          </button>
+
+          {/* Create Cloned / Fake ESP with Food Diversity */}
+          <button
+            onClick={() => {
+              const fakeCount = stateMesh.getFakeEsps().length + 1;
+              setNewFakeId(`AGR-ESP-SIM-${String(fakeCount).padStart(2, '0')}`);
+              setNewFakeName(`Storage Node ${fakeCount}`);
+              setNewFakeFood('apple');
+              setNewFakeHw('ESP32');
+              setNewFakeAreaId(areas[0]?.id || '');
+              setShowCreateFakeModal(true);
+            }}
+            className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-950 transition border border-emerald-400/40"
+            title="Create a similar fake ESP with customizable food type"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>+ Clone / Create Fake ESP</span>
           </button>
 
           {/* Quick Simulate Buttons for both hardware types */}
@@ -675,6 +703,42 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
                       </div>
                     </div>
                   )}
+
+                  {/* Food Commodity & Cycling Telemetry Link */}
+                  <div className="mt-2.5 p-2 rounded-lg bg-vault-950/80 border border-vault-800/80 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-base shrink-0">{getFoodProfile(d.food_type).icon}</span>
+                      <div className="min-w-0">
+                        <span className="text-[9px] uppercase font-bold text-vault-400 block tracking-wider">Commodity Telemetry:</span>
+                        <span className="text-xs font-bold text-slate-100 truncate block">{getFoodProfile(d.food_type).name}</span>
+                      </div>
+                    </div>
+
+                    {d.is_simulated ? (
+                      <div className="shrink-0 flex items-center gap-1">
+                        <select
+                          value={d.food_type || 'potato'}
+                          onChange={async (e) => {
+                            await api.updateFakeEspFood(d.id, e.target.value);
+                            await loadDevices();
+                            await refreshOverview();
+                          }}
+                          className="bg-vault-900 border border-emerald-500/50 hover:border-emerald-400 text-emerald-300 text-xs rounded-lg px-2 py-1 font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer shadow-sm"
+                          title="Switch the food type stored with this node"
+                        >
+                          {getAllFoodProfiles().map(f => (
+                            <option key={f.id} value={f.id}>
+                              {f.icon} {f.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono font-semibold shrink-0">
+                        Online Node (Live)
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Footer Buttons */}
@@ -749,9 +813,19 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
                             </button>
                           )}
                           <button
-                            onClick={() => handleDeleteDevice(d.id, d.user_name)}
+                            onClick={async () => {
+                              if (d.is_simulated) {
+                                if (confirm(`Delete simulated ESP node "${d.user_name}" (${d.id})?`)) {
+                                  await api.deleteFakeEsp(d.id);
+                                  await loadDevices();
+                                  await refreshOverview();
+                                }
+                              } else {
+                                handleDeleteDevice(d.id, d.user_name);
+                              }
+                            }}
                             className="p-1.5 rounded bg-vault-800 hover:bg-rose-900/60 text-vault-400 hover:text-rose-300 transition"
-                            title="Delete Node"
+                            title={d.is_simulated ? "Delete Simulated ESP Node" : "Delete Node"}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -779,6 +853,152 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
             await refreshOverview();
           }}
         />
+      )}
+
+      {/* Create / Clone Fake ESP Modal */}
+      {showCreateFakeModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-vault-900 border border-vault-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-vault-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center border border-emerald-500/30">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Create Cloned / Fake ESP Node</h3>
+                  <p className="text-xs text-vault-400">Mirrors online ESP telemetry with live cycling & customizable commodity.</p>
+                </div>
+              </div>
+              <button onClick={() => setShowCreateFakeModal(false)} className="text-vault-400 hover:text-white p-1 rounded">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-vault-300 font-semibold mb-1">Device ID *</label>
+                  <input
+                    type="text"
+                    value={newFakeId}
+                    onChange={(e) => setNewFakeId(e.target.value.toUpperCase())}
+                    className="w-full bg-vault-950 border border-vault-700 rounded-lg p-2.5 text-white font-mono text-xs focus:ring-1 focus:ring-agri-500"
+                    placeholder="e.g. AGR-ESP-SIM-03"
+                  />
+                </div>
+                <div>
+                  <label className="block text-vault-300 font-semibold mb-1">Node Display Name *</label>
+                  <input
+                    type="text"
+                    value={newFakeName}
+                    onChange={(e) => setNewFakeName(e.target.value)}
+                    className="w-full bg-vault-950 border border-vault-700 rounded-lg p-2.5 text-white text-xs focus:ring-1 focus:ring-agri-500"
+                    placeholder="e.g. Apples Storage Node"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-vault-300 font-semibold mb-1">Hardware Microcontroller</label>
+                  <select
+                    value={newFakeHw}
+                    onChange={(e) => setNewFakeHw(e.target.value as any)}
+                    className="w-full bg-vault-950 border border-vault-700 rounded-lg p-2.5 text-white text-xs focus:ring-1 focus:ring-agri-500"
+                  >
+                    <option value="ESP32">ESP32-DevKit-V1 (Wi-Fi + BLE)</option>
+                    <option value="ESP8266">ESP8266-NodeMCU (Wi-Fi)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-vault-300 font-semibold mb-1">Assign to Storage Zone</label>
+                  <select
+                    value={newFakeAreaId}
+                    onChange={(e) => setNewFakeAreaId(e.target.value)}
+                    className="w-full bg-vault-950 border border-vault-700 rounded-lg p-2.5 text-white text-xs focus:ring-1 focus:ring-agri-500"
+                  >
+                    <option value="">-- Available (Unassigned Fleet) --</option>
+                    {areas.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.name} ({a.commodity || 'General Produce'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-vault-300 font-semibold mb-2">
+                  Select Food Commodity Stored (Cycles near ~19°C / 55 CO₂):
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {getAllFoodProfiles().map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      onClick={() => setNewFakeFood(f.id)}
+                      className={`p-2.5 rounded-xl border text-left transition flex flex-col justify-between ${
+                        newFakeFood === f.id
+                          ? 'border-emerald-500 bg-emerald-950/40 ring-1 ring-emerald-500 shadow-md'
+                          : 'border-vault-800 bg-vault-950/60 hover:border-vault-700 hover:bg-vault-800/40 text-vault-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-xl">{f.icon}</span>
+                        <span className="text-[11px] font-bold text-white truncate">{f.name.split(' ')[0]}</span>
+                      </div>
+                      <span className="text-[9px] text-vault-400 line-clamp-2 leading-tight">{f.category}</span>
+                      <div className="mt-1.5 pt-1 border-t border-vault-800/80 text-[9px] font-mono text-emerald-400">
+                        {f.baseTemp}°C • {f.baseCo2}ppm
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-vault-800">
+              <button
+                type="button"
+                onClick={() => setShowCreateFakeModal(false)}
+                className="px-3.5 py-2 rounded-lg bg-vault-800 hover:bg-vault-700 text-vault-300 text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isCreatingFake || !newFakeId.trim()}
+                onClick={async () => {
+                  setIsCreatingFake(true);
+                  try {
+                    const cleanId = newFakeId.trim().toUpperCase();
+                    const areaObj = areas.find(a => a.id === newFakeAreaId);
+                    await api.createFakeEsp({
+                      id: cleanId,
+                      name: newFakeName.trim() || `Cloned Node (${cleanId.slice(-4)})`,
+                      hardwareType: newFakeHw,
+                      foodType: newFakeFood,
+                      areaId: newFakeAreaId || undefined,
+                      zoneName: areaObj?.name || 'Diversified Vault',
+                      createdAt: new Date().toISOString()
+                    });
+                    setShowCreateFakeModal(false);
+                    await loadDevices();
+                    await refreshOverview();
+                  } catch (err: any) {
+                    alert(`Failed to create fake ESP: ${err?.message || err}`);
+                  } finally {
+                    setIsCreatingFake(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-950 flex items-center gap-1.5 transition disabled:opacity-50"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{isCreatingFake ? 'Deploying...' : 'Deploy Fake ESP Node'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Internet Connection Setup Guide Modal */}
