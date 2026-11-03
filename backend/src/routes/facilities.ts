@@ -46,6 +46,7 @@ router.get('/:id/overview', (req: Request, res: Response): void => {
   const gateway = db.get<Gateway>('SELECT * FROM gateways WHERE facility_id = ? LIMIT 1', facilityId);
 
   // 3. Devices
+  const devices = db.all<ESPDevice>('SELECT * FROM esp_devices WHERE facility_id = ?', facilityId);
   const connectedESPs = devices.filter(d => d.is_online === 1).length;
   const offlineESPs = devices.filter(d => d.is_online === 0).length;
   const pendingDiscovery = devices.filter(d => d.registration_status === 'pending').length;

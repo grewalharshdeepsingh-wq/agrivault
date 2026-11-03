@@ -71,14 +71,14 @@ class VirtualFleetEngine {
       posX: 25.0,
       posY: 30.0,
       posZ: 4.5,
-      temp: 3.8,
-      humidity: 88.0,
-      mq3: 0.45,
-      mq135: 18.2,
-      co2: 1050,
-      ethylene: 0.03,
-      ammonia: 1.2,
-      ethanol: 0.45,
+      temp: 19.0,
+      humidity: 94.5,
+      mq3: 3.8,
+      mq135: 6.8,
+      co2: 55,
+      ethylene: 0.24,
+      ammonia: 6.8,
+      ethanol: 3.8,
       battery: 3.32,
       rssi: -56,
       offline: false
@@ -96,14 +96,14 @@ class VirtualFleetEngine {
       posX: 40.0,
       posY: 30.0,
       posZ: 2.0,
-      temp: 4.1,
-      humidity: 89.5,
-      mq3: 0.50,
-      mq135: 19.0,
-      co2: 1120,
-      ethylene: 0.04,
-      ammonia: 1.4,
-      ethanol: 0.50,
+      temp: 19.2,
+      humidity: 95.0,
+      mq3: 3.9,
+      mq135: 7.0,
+      co2: 55,
+      ethylene: 0.25,
+      ammonia: 7.0,
+      ethanol: 3.9,
       battery: 3.31,
       rssi: -60,
       offline: false
@@ -121,14 +121,14 @@ class VirtualFleetEngine {
       posX: 95.0,
       posY: 60.0,
       posZ: 6.8,
-      temp: 3.5,
-      humidity: 91.0,
-      mq3: 0.38,
-      mq135: 16.5,
-      co2: 920,
-      ethylene: 0.02,
-      ammonia: 0.9,
-      ethanol: 0.38,
+      temp: 18.9,
+      humidity: 94.0,
+      mq3: 3.7,
+      mq135: 6.6,
+      co2: 54,
+      ethylene: 0.23,
+      ammonia: 6.6,
+      ethanol: 3.7,
       battery: 3.30,
       rssi: -64,
       offline: false
@@ -146,14 +146,14 @@ class VirtualFleetEngine {
       posX: 145.0,
       posY: 80.0,
       posZ: 2.5,
-      temp: 5.2,
-      humidity: 82.0,
-      mq3: 0.25,
-      mq135: 22.0,
-      co2: 780,
-      ethylene: 0.01,
-      ammonia: 0.6,
-      ethanol: 0.25,
+      temp: 19.4,
+      humidity: 93.5,
+      mq3: 3.6,
+      mq135: 6.5,
+      co2: 56,
+      ethylene: 0.22,
+      ammonia: 6.5,
+      ethanol: 3.6,
       battery: 3.33,
       rssi: -52,
       offline: false
@@ -434,27 +434,25 @@ class VirtualFleetEngine {
         break;
 
       case 'normal':
-      default:
-        if (node.deviceId === 'AGR-ESP-001') {
-          node.temp += (3.8 - node.temp) * 0.1;
-          node.humidity += (88.0 - node.humidity) * 0.1;
-          node.co2 += (1050 - node.co2) * 0.1;
-          node.mq3 += (0.45 - node.mq3) * 0.1;
-          node.mq135 += (18.2 - node.mq135) * 0.1;
-        }
-        if (node.deviceId === 'AGR-ESP-002') {
-          node.temp += (4.1 - node.temp) * 0.1;
-          node.humidity += (89.5 - node.humidity) * 0.1;
-          node.co2 += (1120 - node.co2) * 0.1;
-          node.mq3 += (0.50 - node.mq3) * 0.1;
-          node.mq135 += (19.0 - node.mq135) * 0.1;
-        }
-        if (node.deviceId === 'AGR-ESP-003') {
-          node.temp += (3.5 - node.temp) * 0.1;
-          node.humidity += (91.0 - node.humidity) * 0.1;
-          node.co2 += (920 - node.co2) * 0.1;
-        }
+      default: {
+        const tSec = Date.now() / 1000;
+        const targetTemp = 19.0 + 0.65 * Math.sin(tSec * 2 * Math.PI / 60);
+        const targetCo2 = 55 + 3.2 * Math.sin(tSec * 2 * Math.PI / 45 + 1.0);
+        const targetHum = 94.5 + 1.5 * Math.sin(tSec * 2 * Math.PI / 75 + 2.0);
+        const targetNh3 = 6.8 + 0.6 * Math.sin(tSec * 2 * Math.PI / 50 + 0.5);
+        const targetEth = 3.8 + 0.4 * Math.sin(tSec * 2 * Math.PI / 40 + 1.5);
+        const targetEthylene = 0.24 + 0.04 * Math.sin(tSec * 2 * Math.PI / 80 + 3.0);
+
+        node.temp = +targetTemp.toFixed(1);
+        node.co2 = Math.round(targetCo2);
+        node.humidity = +targetHum.toFixed(1);
+        node.ammonia = +targetNh3.toFixed(2);
+        node.ethanol = +targetEth.toFixed(2);
+        node.ethylene = +targetEthylene.toFixed(3);
+        node.mq3 = +targetEth.toFixed(2);
+        node.mq135 = +targetNh3.toFixed(2);
         break;
+      }
     }
   }
 }
