@@ -1,5 +1,14 @@
 import { stateMesh } from './stateMesh';
-import { getFirebaseDevices, initFirebaseRealtime, saveFirebaseRoom, deleteFirebaseRoom, updateFirebaseDevice } from './firebase';
+import {
+  getFirebaseDevices,
+  initFirebaseRealtime,
+  saveFirebaseRoom,
+  deleteFirebaseRoom,
+  updateFirebaseDevice,
+  getRemoteTelemetryConfig,
+  setRemoteTelemetryConfig,
+  RemoteTelemetryConfig
+} from './firebase';
 
 const API_BASE = '/api';
 
@@ -671,5 +680,9 @@ export const api = {
     request<any>('/simulation/node/toggle', { method: 'POST', body: JSON.stringify({ deviceId, offline }) }),
 
   // Network & System Info
-  getNetworkInfo: () => request<any>('/system/network-info')
+  getNetworkInfo: () => request<any>('/system/network-info'),
+
+  // Remote Database Telemetry Controller
+  getRemoteConfig: () => getRemoteTelemetryConfig(),
+  setRemoteConfig: (config: Partial<RemoteTelemetryConfig>) => setRemoteTelemetryConfig(config)
 };

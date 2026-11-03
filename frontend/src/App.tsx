@@ -28,6 +28,7 @@ import { SensorDiagnosticsPage } from './pages/SensorDiagnosticsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { HelpPage } from './pages/HelpPage';
 import { SimulationPage } from './pages/SimulationPage';
+import { RemoteControlPage } from './pages/RemoteControlPage';
 
 import {
   X,
@@ -165,6 +166,8 @@ export const App: React.FC = () => {
                 {currentTab === 'help' && <HelpPage />}
 
                 {currentTab === 'simulation' && <SimulationPage />}
+
+                {currentTab === 'remote_control' && <RemoteControlPage />}
               </>
             )}
           </div>
@@ -202,6 +205,7 @@ export const App: React.FC = () => {
                 { id: 'risk_advisor', label: 'Risk Advisor', icon: ShieldAlert },
                 { id: 'alerts', label: 'Alerts & History', icon: BarChart3 },
                 { id: 'relays', label: 'Manual Relays', icon: ToggleRight },
+                { id: 'remote_control', label: 'Remote Controller', icon: Radio },
                 { id: 'analytics', label: 'Analytics & Trends', icon: Activity },
                 { id: 'reports', label: 'Reports & Export', icon: BarChart3 },
                 { id: 'diagnostics', label: 'Sensor Diagnostics', icon: Activity },

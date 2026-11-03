@@ -107,6 +107,18 @@ export const Navbar: React.FC = () => {
             </div>
           )}
 
+          {/* Remote DB Controller Shortcut */}
+          <a
+            href="/remote_control.html"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold transition shadow-sm"
+            title="Open Standalone Remote Database Controller"
+          >
+            <Radio className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            <span>Remote DB App</span>
+          </a>
+
           {/* Simulation Mode Toggle Button */}
           <div className="relative">
             <button

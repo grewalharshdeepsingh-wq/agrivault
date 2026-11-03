@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AgriVault | Cloud Database Remote Controller</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            vault: {
+              950: '#070b12',
+              900: '#0d131f',
+              850: '#111827',
+              800: '#172033',
+              700: '#26334d',
+              600: '#3d4e6e',
+              500: '#5c7094',
+              400: '#8ba0c2',
+              300: '#b8c9e0'
+            },
+            agri: {
+              400: '#34d399',
+              500: '#10b981',
+              600: '#059669',
+              700: '#047857'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { background-color: #070b12; color: #f1f5f9; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+    input[type=range] { accent-color: #10b981; }
+  </style>
+</head>
+<body class="min-h-screen p-4 sm:p-6 md:p-8 flex flex-col justify-between">
+  <div class="max-w-4xl mx-auto w-full space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-vault-800 pb-5">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-agri-600 flex items-center justify-center font-bold text-white shadow-lg shadow-agri-600/30">
+            AV
+          </div>
+          <h1 class="text-xl sm:text-2xl font-black text-white tracking-tight">AgriVault Cloud Controller</h1>
+        </div>
+        <p class="text-xs text-vault-400 mt-1">
+          Remote parameter transmitter for Vercel & Firebase Cloud RTDB with real-time sinusoidal cycling.
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2 self-start sm:self-auto">
+        <span id="conn-pill" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Cloud Connected</span>
+        </span>
+        <a href="/" class="px-3 py-1 text-xs font-semibold bg-vault-800 hover:bg-vault-700 text-vault-300 rounded-lg border border-vault-700 transition">
+          View Live App &rarr;
+        </a>
+      </div>
+    </div>
+
+    <!-- Live Preview Strip -->
+    <div class="bg-vault-900 border border-vault-800 rounded-2xl p-4 sm:p-5 shadow-xl space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-vault-400 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-agri-400 animate-pulse"></span>
+          <span>Live Cycling Telemetry Output (Broadcasting to Vercel)</span>
+        </h2>
+        <span id="cycle-mode-label" class="text-[10px] text-vault-400 font-mono">Sinusoidal Cycling: ACTIVE</span>
+      </div>
+
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+        <div class="bg-vault-950 p-3 rounded-xl border border-vault-800/80">
+          <span class="text-[10px] text-vault-400 block font-semibold">Temperature</span>
+          <div class="flex items-baseline gap-1 mt-0.5">
+            <span id="preview-temp" class="text-2xl font-black font-mono text-rose-400">19.0</span>
+            <span class="text-[10px] text-vault-500 font-mono">°C</span>
+          </div>
+          <span id="base-temp-label" class="text-[9px] text-vault-500 font-mono">Base: 19.0°C</span>
+        </div>
+
+        <div class="bg-vault-950 p-3 rounded-xl border border-vault-800/80">
+          <span class="text-[10px] text-vault-400 block font-semibold">Respiration CO2</span>
+          <div class="flex items-baseline gap-1 mt-0.5">
+            <span id="preview-co2" class="text-2xl font-black font-mono text-emerald-400">55</span>
+            <span class="text-[10px] text-vault-500 font-mono">ppm</span>
+          </div>
+          <span id="base-co2-label" class="text-[9px] text-vault-500 font-mono">Base: 55 ppm</span>
+        </div>
+
+        <div class="bg-vault-950 p-3 rounded-xl border border-vault-800/80">
+          <span class="text-[10px] text-vault-400 block font-semibold">Relative Humidity</span>
+          <div class="flex items-baseline gap-1 mt-0.5">
+            <span id="preview-hum" class="text-2xl font-black font-mono text-sky-400">94.5</span>
+            <span class="text-[10px] text-vault-500 font-mono">%</span>
+          </div>
+          <span id="base-hum-label" class="text-[9px] text-vault-500 font-mono">Base: 94.5%</span>
+        </div>
+
+        <div class="bg-vault-950 p-3 rounded-xl border border-vault-800/80">
+          <span class="text-[10px] text-vault-400 block font-semibold">Ammonia (NH3)</span>
+          <div class="flex items-baseline gap-1 mt-0.5">
+            <span id="preview-nh3" class="text-2xl font-black font-mono text-amber-400">6.80</span>
+            <span class="text-[10px] text-vault-500 font-mono">ppm</span>
+          </div>
+          <span id="base-nh3-label" class="text-[9px] text-vault-500 font-mono">Base: 6.8 ppm</span>
+        </div>
+
+        <div class="bg-vault-950 p-3 rounded-xl border border-vault-800/80">
+          <span class="text-[10px] text-vault-400 block font-semibold">Ethanol / VOC</span>
+          <div class="flex items-baseline gap-1 mt-0.5">
+            <span id="preview-eth" class="text-2xl font-black font-mono text-amber-400">3.80</span>
+            <span class="text-[10px] text-vault-500 font-mono">ppm</span>
+          </div>
+          <span id="base-eth-label" class="text-[9px] text-vault-500 font-mono">Base: 3.8 ppm</span>
+        </div>
+
+        <div class="bg-vault-950 p-3 rounded-xl border border-vault-800/80">
+          <span class="text-[10px] text-vault-400 block font-semibold">Ethylene (C2H4)</span>
+          <div class="flex items-baseline gap-1 mt-0.5">
+            <span id="preview-ethylene" class="text-2xl font-black font-mono text-indigo-400">0.240</span>
+            <span class="text-[10px] text-vault-500 font-mono">ppm</span>
+          </div>
+          <span id="base-ethylene-label" class="text-[9px] text-vault-500 font-mono">Base: 0.24 ppm</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preset Action Buttons -->
+    <div>
+      <h2 class="text-xs font-bold uppercase tracking-wider text-vault-400 mb-2.5">
+        Quick Physiological Presets (1-Click Cloud Transmission)
+      </h2>
+      <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <button onclick="applyPreset('rotting')" class="text-left bg-vault-900 hover:bg-vault-850 border border-vault-800 hover:border-agri-500 rounded-xl p-3.5 transition group">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">Active Rotting</span>
+            <span class="text-xs font-bold text-rose-400">19°C / 55 CO2</span>
+          </div>
+          <h3 class="text-sm font-bold text-white group-hover:text-agri-400 transition">Food Rotting & Spoilage</h3>
+          <p class="text-[11px] text-vault-400 mt-1">High temp (19°C), rotting ethanol (3.8 ppm) & ammonia putrefaction.</p>
+        </button>
+
+        <button onclick="applyPreset('normal')" class="text-left bg-vault-900 hover:bg-vault-850 border border-vault-800 hover:border-agri-500 rounded-xl p-3.5 transition group">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Fresh Storage</span>
+            <span class="text-xs font-bold text-emerald-400">4°C / 950 CO2</span>
+          </div>
+          <h3 class="text-sm font-bold text-white group-hover:text-agri-400 transition">Nominal Cold Vault</h3>
+          <p class="text-[11px] text-vault-400 mt-1">Optimal holding condition (4°C, 89% RH, nominal trace gases).</p>
+        </button>
+
+        <button onclick="applyPreset('thermal_runaway')" class="text-left bg-vault-900 hover:bg-vault-850 border border-vault-800 hover:border-agri-500 rounded-xl p-3.5 transition group">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">Cooling Loss</span>
+            <span class="text-xs font-bold text-amber-400">24.5°C</span>
+          </div>
+          <h3 class="text-sm font-bold text-white group-hover:text-agri-400 transition">Thermal Runaway</h3>
+          <p class="text-[11px] text-vault-400 mt-1">Refrigeration failure driving rapid ambient heating to 24.5°C.</p>
+        </button>
+
+        <button onclick="applyPreset('ammonia_leak')" class="text-left bg-vault-900 hover:bg-vault-850 border border-vault-800 hover:border-agri-500 rounded-xl p-3.5 transition group">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">Gas Hazard</span>
+            <span class="text-xs font-bold text-purple-400">8.5 ppm NH3</span>
+          </div>
+          <h3 class="text-sm font-bold text-white group-hover:text-agri-400 transition">Ammonia Coil Leak</h3>
+          <p class="text-[11px] text-vault-400 mt-1">Evaporator pinhole breach flooding vault with toxic refrigerant gas.</p>
+        </button>
+      </div>
+    </div>
+
+    <!-- Sliders & Inputs Control Grid -->
+    <div class="bg-vault-900 border border-vault-800 rounded-2xl p-5 sm:p-6 shadow-xl space-y-5">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-vault-800 pb-4">
+        <div>
+          <h2 class="text-base font-bold text-white">Granular Telemetry Sliders</h2>
+          <p class="text-xs text-vault-400">Move any slider to update the cloud database. Values cycle smoothly around the configured baseline.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <label class="flex items-center gap-2 text-xs font-semibold text-vault-300 cursor-pointer">
+            <input type="checkbox" id="cycling-check" checked onchange="handleCyclingToggle(this.checked)" class="rounded bg-vault-950 border-vault-700 text-agri-500" />
+            <span>Enable Time Cycling</span>
+          </label>
+
+          <button id="push-btn" onclick="pushToCloud()" class="px-4 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-bold shadow-lg shadow-agri-600/30 transition flex items-center gap-1.5">
+            <span id="btn-icon">⚡</span>
+            <span id="btn-text">Transmit to Cloud</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-5">
+        <!-- Temp -->
+        <div class="bg-vault-950 p-4 rounded-xl border border-vault-800 space-y-2">
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-white">Base Temperature (°C)</span>
+            <span id="slider-temp-val" class="font-mono text-rose-400 text-sm">19.0°C</span>
+          </div>
+          <input type="range" id="slider-temp" min="0" max="40" step="0.5" value="19.0" oninput="onSliderMove('targetTemperature', this.value)" class="w-full" />
+          <div class="flex justify-between text-[10px] text-vault-500 font-mono">
+            <span>0°C (Cold)</span>
+            <span>19°C (Rotting)</span>
+            <span>40°C (Extreme)</span>
+          </div>
+        </div>
+
+        <!-- CO2 -->
+        <div class="bg-vault-950 p-4 rounded-xl border border-vault-800 space-y-2">
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-white">Base CO2 (ppm)</span>
+            <span id="slider-co2-val" class="font-mono text-emerald-400 text-sm">55 ppm</span>
+          </div>
+          <input type="range" id="slider-co2" min="0" max="3000" step="5" value="55" oninput="onSliderMove('targetCo2', this.value)" class="w-full" />
+          <div class="flex justify-between text-[10px] text-vault-500 font-mono">
+            <span>0 ppm</span>
+            <span>55 ppm</span>
+            <span>1200 ppm (Elevated)</span>
+            <span>3000 ppm</span>
+          </div>
+        </div>
+
+        <!-- Humidity -->
+        <div class="bg-vault-950 p-4 rounded-xl border border-vault-800 space-y-2">
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-white">Relative Humidity (%)</span>
+            <span id="slider-hum-val" class="font-mono text-sky-400 text-sm">94.5%</span>
+          </div>
+          <input type="range" id="slider-hum" min="20" max="100" step="0.5" value="94.5" oninput="onSliderMove('targetHumidity', this.value)" class="w-full" />
+          <div class="flex justify-between text-[10px] text-vault-500 font-mono">
+            <span>20% (Dry)</span>
+            <span>89% (Cold Store)</span>
+            <span>95% (Rot Moisture)</span>
+          </div>
+        </div>
+
+        <!-- Ammonia -->
+        <div class="bg-vault-950 p-4 rounded-xl border border-vault-800 space-y-2">
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-white">Ammonia Putrefaction (ppm)</span>
+            <span id="slider-nh3-val" class="font-mono text-amber-400 text-sm">6.8 ppm</span>
+          </div>
+          <input type="range" id="slider-nh3" min="0" max="15" step="0.1" value="6.8" oninput="onSliderMove('targetAmmonia', this.value)" class="w-full" />
+          <div class="flex justify-between text-[10px] text-vault-500 font-mono">
+            <span>0 ppm</span>
+            <span>4.0 ppm (Warning)</span>
+            <span>6.8 ppm (Severe Rot)</span>
+          </div>
+        </div>
+
+        <!-- Ethanol -->
+        <div class="bg-vault-950 p-4 rounded-xl border border-vault-800 space-y-2">
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-white">Ethanol Fermentation (ppm)</span>
+            <span id="slider-eth-val" class="font-mono text-amber-400 text-sm">3.8 ppm</span>
+          </div>
+          <input type="range" id="slider-eth" min="0" max="10" step="0.1" value="3.8" oninput="onSliderMove('targetEthanol', this.value)" class="w-full" />
+          <div class="flex justify-between text-[10px] text-vault-500 font-mono">
+            <span>0 ppm</span>
+            <span>1.8 ppm (Warning)</span>
+            <span>3.8 ppm (Soft Rot)</span>
+          </div>
+        </div>
+
+        <!-- Ethylene -->
+        <div class="bg-vault-950 p-4 rounded-xl border border-vault-800 space-y-2">
+          <div class="flex justify-between text-xs font-bold">
+            <span class="text-white">Ethylene Decay Gas (ppm)</span>
+            <span id="slider-ethylene-val" class="font-mono text-indigo-400 text-sm">0.24 ppm</span>
+          </div>
+          <input type="range" id="slider-ethylene" min="0" max="1.0" step="0.01" value="0.24" oninput="onSliderMove('targetEthylene', this.value)" class="w-full" />
+          <div class="flex justify-between text-[10px] text-vault-500 font-mono">
+            <span>0 ppm</span>
+            <span>0.10 ppm (Elevated)</span>
+            <span>0.24 ppm (High Rot)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-8 text-center text-xs text-vault-500 font-mono">
+    AgriVault Industrial Cloud Remote &bull; Connected to Asia-Southeast1 Database Cluster
+  </footer>
+
+  <script>
+    const FIREBASE_BASE = "https://agrivault-iot-7a2f-default-rtdb.asia-southeast1.firebasedatabase.app";
+
+    let state = {
+      targetTemperature: 19.0,
+      targetCo2: 55,
+      targetHumidity: 94.5,
+      targetAmmonia: 6.8,
+      targetEthanol: 3.8,
+      targetEthylene: 0.24,
+      enableCycling: true,
+      condition: 'rotting'
+    };
+
+    let debounceTimer = null;
+
+    // Fetch initial config from cloud
+    async function initCloudConfig() {
+      try {
+        const res = await fetch(`${FIREBASE_BASE}/remote_config.json`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data === 'object') {
+            state = { ...state, ...data };
+            syncSlidersToState();
+          }
+        }
+      } catch (e) {
+        console.warn('Initial cloud read error:', e);
+      }
+    }
+
+    function syncSlidersToState() {
+      document.getElementById('slider-temp').value = state.targetTemperature;
+      document.getElementById('slider-temp-val').textContent = state.targetTemperature + '°C';
+      document.getElementById('base-temp-label').textContent = 'Base: ' + state.targetTemperature + '°C';
+
+      document.getElementById('slider-co2').value = state.targetCo2;
+      document.getElementById('slider-co2-val').textContent = state.targetCo2 + ' ppm';
+      document.getElementById('base-co2-label').textContent = 'Base: ' + state.targetCo2 + ' ppm';
+
+      document.getElementById('slider-hum').value = state.targetHumidity;
+      document.getElementById('slider-hum-val').textContent = state.targetHumidity + '%';
+      document.getElementById('base-hum-label').textContent = 'Base: ' + state.targetHumidity + '%';
+
+      document.getElementById('slider-nh3').value = state.targetAmmonia;
+      document.getElementById('slider-nh3-val').textContent = state.targetAmmonia + ' ppm';
+      document.getElementById('base-nh3-label').textContent = 'Base: ' + state.targetAmmonia + ' ppm';
+
+      document.getElementById('slider-eth').value = state.targetEthanol;
+      document.getElementById('slider-eth-val').textContent = state.targetEthanol + ' ppm';
+      document.getElementById('base-eth-label').textContent = 'Base: ' + state.targetEthanol + ' ppm';
+
+      document.getElementById('slider-ethylene').value = state.targetEthylene;
+      document.getElementById('slider-ethylene-val').textContent = state.targetEthylene + ' ppm';
+      document.getElementById('base-ethylene-label').textContent = 'Base: ' + state.targetEthylene + ' ppm';
+
+      document.getElementById('cycling-check').checked = state.enableCycling !== false;
+      document.getElementById('cycle-mode-label').textContent = state.enableCycling !== false ? 'Sinusoidal Cycling: ACTIVE' : 'Sinusoidal Cycling: PAUSED (Steady State)';
+    }
+
+    function onSliderMove(key, val) {
+      const num = parseFloat(val);
+      state[key] = num;
+      syncSlidersToState();
+
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        pushToCloud();
+      }, 400);
+    }
+
+    function handleCyclingToggle(checked) {
+      state.enableCycling = checked;
+      syncSlidersToState();
+      pushToCloud();
+    }
+
+    const PRESETS = {
+      rotting: {
+        targetTemperature: 19.0,
+        targetCo2: 55,
+        targetHumidity: 94.5,
+        targetAmmonia: 6.8,
+        targetEthanol: 3.8,
+        targetEthylene: 0.24,
+        condition: 'rotting'
+      },
+      normal: {
+        targetTemperature: 4.0,
+        targetCo2: 950,
+        targetHumidity: 89.0,
+        targetAmmonia: 0.8,
+        targetEthanol: 0.3,
+        targetEthylene: 0.02,
+        condition: 'normal'
+      },
+      thermal_runaway: {
+        targetTemperature: 24.5,
+        targetCo2: 1750,
+        targetHumidity: 78.0,
+        targetAmmonia: 2.1,
+        targetEthanol: 1.2,
+        targetEthylene: 0.15,
+        condition: 'overheating'
+      },
+      ammonia_leak: {
+        targetTemperature: 11.5,
+        targetCo2: 800,
+        targetHumidity: 92.0,
+        targetAmmonia: 8.5,
+        targetEthanol: 0.4,
+        targetEthylene: 0.04,
+        condition: 'refrigerant_leak'
+      }
+    };
+
+    function applyPreset(name) {
+      const p = PRESETS[name];
+      if (p) {
+        state = { ...state, ...p };
+        syncSlidersToState();
+        pushToCloud();
+      }
+    }
+
+    async function pushToCloud() {
+      const btn = document.getElementById('push-btn');
+      const btnText = document.getElementById('btn-text');
+      const btnIcon = document.getElementById('btn-icon');
+
+      btnText.textContent = 'Transmitting...';
+      btnIcon.textContent = '⏳';
+
+      const payload = {
+        ...state,
+        updatedAt: Date.now()
+      };
+
+      try {
+        await Promise.all([
+          fetch(`${FIREBASE_BASE}/remote_config.json`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          }),
+          fetch(`${FIREBASE_BASE}/devices/AGR-ESP-89D520.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              temperature: state.targetTemperature,
+              co2: state.targetCo2,
+              humidity: state.targetHumidity,
+              ammonia: state.targetAmmonia,
+              ethanol: state.targetEthanol,
+              ethylene: state.targetEthylene,
+              is_online: 1,
+              last_heartbeat: Date.now()
+            })
+          }),
+          fetch(`${FIREBASE_BASE}/devices/AGR-ESP-A4BE68.json`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              temperature: state.targetTemperature,
+              co2: state.targetCo2,
+              humidity: state.targetHumidity,
+              ammonia: state.targetAmmonia,
+              ethanol: state.targetEthanol,
+              ethylene: state.targetEthylene,
+              is_online: 1,
+              last_heartbeat: Date.now()
+            })
+          })
+        ]);
+
+        btnText.textContent = 'Transmitted!';
+        btnIcon.textContent = '✓';
+        setTimeout(() => {
+          btnText.textContent = 'Transmit to Cloud';
+          btnIcon.textContent = '⚡';
+        }, 1500);
+      } catch (err) {
+        console.error('Push error:', err);
+        btnText.textContent = 'Failed!';
+        btnIcon.textContent = '✗';
+      }
+    }
+
+    // Dynamic Live Preview Loop (fluctuates in real time)
+    setInterval(() => {
+      const tSec = Date.now() / 1000;
+      const isCycling = state.enableCycling !== false;
+      const baseTemp = state.targetTemperature;
+      const baseCo2 = state.targetCo2;
+      const baseHum = state.targetHumidity;
+      const baseNh3 = state.targetAmmonia;
+      const baseEth = state.targetEthanol;
+      const baseEthylene = state.targetEthylene;
+
+      const tempNoise = isCycling ? 0.65 * Math.sin((tSec * 2 * Math.PI) / 60) : 0;
+      const co2Noise = isCycling ? 3.2 * Math.sin((tSec * 2 * Math.PI) / 45 + 1.0) : 0;
+      const humNoise = isCycling ? 1.5 * Math.sin((tSec * 2 * Math.PI) / 75 + 2.0) : 0;
+      const nh3Noise = isCycling ? 0.6 * Math.sin((tSec * 2 * Math.PI) / 50 + 0.5) : 0;
+      const ethNoise = isCycling ? 0.4 * Math.sin((tSec * 2 * Math.PI) / 40 + 1.5) : 0;
+      const ethyleneNoise = isCycling ? 0.04 * Math.sin((tSec * 2 * Math.PI) / 80 + 3.0) : 0;
+
+      document.getElementById('preview-temp').textContent = (baseTemp + tempNoise).toFixed(1);
+      document.getElementById('preview-co2').textContent = Math.max(0, Math.round(baseCo2 + co2Noise));
+      document.getElementById('preview-hum').textContent = Math.min(100, Math.max(0, (baseHum + humNoise).toFixed(1)));
+      document.getElementById('preview-nh3').textContent = Math.max(0, (baseNh3 + nh3Noise).toFixed(2));
+      document.getElementById('preview-eth').textContent = Math.max(0, (baseEth + ethNoise).toFixed(2));
+      document.getElementById('preview-ethylene').textContent = Math.max(0, (baseEthylene + ethyleneNoise).toFixed(3));
+    }, 1000);
+
+    initCloudConfig();
+  </script>
+</body>
+</html>

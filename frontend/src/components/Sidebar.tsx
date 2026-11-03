@@ -36,6 +36,7 @@ export type NavTab =
   | 'analytics'
   | 'reports'
   | 'relays'
+  | 'remote_control'
   | 'users'
   | 'diagnostics'
   | 'settings'
@@ -95,6 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     {
       title: 'Control & Analytics',
       items: [
+        { id: 'remote_control', label: 'Remote Controller', icon: Radio, badge: 'Cloud DB', badgeColor: 'bg-emerald-600' },
         { id: 'relays', label: 'Relay Control', icon: ToggleRight },
         { id: 'analytics', label: 'Analytics & Trends', icon: Activity },
         { id: 'reports', label: 'Compliance Reports', icon: BarChart3 }

@@ -26,20 +26,108 @@ const lastDeviceHeartbeats = new Map<string, number>();
 const lastDeviceArrivalTimes = new Map<string, number>();
 let isInitialized = false;
 
-export function getCyclingRottingTelemetry() {
+export interface RemoteTelemetryConfig {
+  targetTemperature: number;
+  targetCo2: number;
+  targetHumidity: number;
+  targetAmmonia: number;
+  targetEthanol: number;
+  targetEthylene: number;
+  enableCycling: boolean;
+  condition: string;
+  updatedAt?: number;
+}
+
+let activeRemoteConfig: RemoteTelemetryConfig = {
+  targetTemperature: 19.0,
+  targetCo2: 55,
+  targetHumidity: 94.5,
+  targetAmmonia: 6.8,
+  targetEthanol: 3.8,
+  targetEthylene: 0.24,
+  enableCycling: true,
+  condition: 'rotting'
+};
+
+export function getRemoteTelemetryConfig(): RemoteTelemetryConfig {
+  return { ...activeRemoteConfig };
+}
+
+export async function setRemoteTelemetryConfig(updates: Partial<RemoteTelemetryConfig>): Promise<void> {
+  const merged: RemoteTelemetryConfig = {
+    ...activeRemoteConfig,
+    ...updates,
+    updatedAt: Date.now()
+  };
+  activeRemoteConfig = merged;
+
+  // 1. Sync to Firebase Cloud RTDB
+  try {
+    const configRef = ref(firebaseDb, 'remote_config');
+    await update(configRef, merged);
+  } catch (err) {
+    console.warn('[Firebase RTDB] Failed to update remote_config:', err);
+  }
+
+  // 2. Patch devices in Firebase Cloud RTDB
+  const patch: any = {
+    temperature: merged.targetTemperature,
+    co2: merged.targetCo2,
+    humidity: merged.targetHumidity,
+    ammonia: merged.targetAmmonia,
+    ethanol: merged.targetEthanol,
+    ethylene: merged.targetEthylene,
+    is_online: 1,
+    last_heartbeat: Date.now()
+  };
+
+  for (const normId of Array.from(firebaseDevicesMap.keys())) {
+    try {
+      const devRef = ref(firebaseDb, `devices/${normId}`);
+      await update(devRef, patch);
+    } catch {
+      // ignore
+    }
+  }
+
+  // 3. Immediately update in-memory devices & emit
+  for (const [normId, dev] of firebaseDevicesMap.entries()) {
+    dev.sensors = buildSensors(normId, dev.area_id, (dev as any)._raw || {}, dev.sensors);
+    dev.is_online = 1;
+    dev.last_heartbeat = new Date().toISOString();
+    wsManager.emit('device_updated', dev);
+  }
+  wsManager.emit('telemetry_update', {});
+  wsManager.emit('remote_config_updated', merged);
+}
+
+export function getCyclingRottingTelemetry(cfg: RemoteTelemetryConfig = activeRemoteConfig) {
   const tSec = Date.now() / 1000;
+  const isCycling = cfg.enableCycling !== false;
+
+  const baseTemp = typeof cfg.targetTemperature === 'number' ? cfg.targetTemperature : 19.0;
+  const baseCo2 = typeof cfg.targetCo2 === 'number' ? cfg.targetCo2 : 55;
+  const baseHum = typeof cfg.targetHumidity === 'number' ? cfg.targetHumidity : 94.5;
+  const baseNh3 = typeof cfg.targetAmmonia === 'number' ? cfg.targetAmmonia : 6.8;
+  const baseEth = typeof cfg.targetEthanol === 'number' ? cfg.targetEthanol : 3.8;
+  const baseEthylene = typeof cfg.targetEthylene === 'number' ? cfg.targetEthylene : 0.24;
+
+  const tempNoise = isCycling ? 0.65 * Math.sin((tSec * 2 * Math.PI) / 60) : 0;
+  const co2Noise = isCycling ? 3.2 * Math.sin((tSec * 2 * Math.PI) / 45 + 1.0) : 0;
+  const humNoise = isCycling ? 1.5 * Math.sin((tSec * 2 * Math.PI) / 75 + 2.0) : 0;
+  const nh3Noise = isCycling ? 0.6 * Math.sin((tSec * 2 * Math.PI) / 50 + 0.5) : 0;
+  const ethNoise = isCycling ? 0.4 * Math.sin((tSec * 2 * Math.PI) / 40 + 1.5) : 0;
+  const ethyleneNoise = isCycling ? 0.04 * Math.sin((tSec * 2 * Math.PI) / 80 + 3.0) : 0;
+
   return {
-    // Temperature shows ~19 degree and cycles as per time
-    temperature: +(19.0 + 0.65 * Math.sin((tSec * 2 * Math.PI) / 60)).toFixed(1),
-    // CO2 levels 55 and cycle also
-    co2: Math.round(55 + 3.2 * Math.sin((tSec * 2 * Math.PI) / 45 + 1.0)),
-    // Other data representing food rotting (high moisture, decomposition ammonia & ethanol, ethylene)
-    humidity: +(94.5 + 1.5 * Math.sin((tSec * 2 * Math.PI) / 75 + 2.0)).toFixed(1),
-    ammonia: +(6.8 + 0.6 * Math.sin((tSec * 2 * Math.PI) / 50 + 0.5)).toFixed(2),
-    ethanol: +(3.8 + 0.4 * Math.sin((tSec * 2 * Math.PI) / 40 + 1.5)).toFixed(2),
-    ethylene: +(0.24 + 0.04 * Math.sin((tSec * 2 * Math.PI) / 80 + 3.0)).toFixed(3),
-    mq3: Math.round(1850 + 120 * Math.sin((tSec * 2 * Math.PI) / 40 + 1.5)),
-    mq135: Math.round(2250 + 150 * Math.sin((tSec * 2 * Math.PI) / 50 + 0.5))
+    temperature: +(baseTemp + tempNoise).toFixed(1),
+    co2: Math.max(0, Math.round(baseCo2 + co2Noise)),
+    humidity: Math.min(100, Math.max(0, +(baseHum + humNoise).toFixed(1))),
+    ammonia: Math.max(0, +(baseNh3 + nh3Noise).toFixed(2)),
+    ethanol: Math.max(0, +(baseEth + ethNoise).toFixed(2)),
+    ethylene: Math.max(0, +(baseEthylene + ethyleneNoise).toFixed(3)),
+    mq3: Math.round(Math.max(50, (baseEth + ethNoise) * 480)),
+    mq135: Math.round(Math.max(100, (baseNh3 + nh3Noise) * 330))
   };
 }
 
@@ -278,6 +366,26 @@ export function initFirebaseRealtime(): void {
       }
     }, (error) => {
       console.warn('[Firebase RTDB] Rooms listen error:', error);
+    });
+
+    // Synchronize remote telemetry configuration across all users and controllers
+    const remoteConfigRef = ref(firebaseDb, 'remote_config');
+    onValue(remoteConfigRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data && typeof data === 'object') {
+        activeRemoteConfig = {
+          ...activeRemoteConfig,
+          ...data
+        };
+        for (const [normId, dev] of firebaseDevicesMap.entries()) {
+          dev.sensors = buildSensors(normId, dev.area_id, (dev as any)._raw || {}, dev.sensors);
+          wsManager.emit('device_updated', dev);
+        }
+        wsManager.emit('telemetry_update', {});
+        wsManager.emit('remote_config_updated', activeRemoteConfig);
+      }
+    }, (error) => {
+      console.warn('[Firebase RTDB] Remote config listen error:', error);
     });
 
     console.log('[AgriVault] Firebase Realtime Database listener active for Asia-Southeast1 cluster.');
