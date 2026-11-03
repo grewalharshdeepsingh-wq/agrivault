@@ -5,7 +5,8 @@ import {
   Radio,
   AlertTriangle,
   Cpu,
-  Menu
+  Menu,
+  BrainCircuit
 } from 'lucide-react';
 import { NavTab } from './Sidebar';
 import { useApp } from '../context/AppContext';
@@ -30,9 +31,9 @@ export const MobileNav: React.FC<MobileNavProps> = ({ currentTab, onSelectTab, o
   const items: MobileNavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'areas', label: 'Areas', icon: Layers },
+    { id: 'ai_planner', label: 'AI Plan', icon: BrainCircuit },
     { id: 'live', label: 'Live', icon: Radio },
     { id: 'alerts', label: 'Alerts', icon: AlertTriangle, count: alertCount },
-    { id: 'devices', label: 'Devices', icon: Cpu },
   ];
 
   return (

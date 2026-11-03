@@ -699,6 +699,13 @@ export const api = {
   // Network & System Info
   getNetworkInfo: () => request<any>('/system/network-info'),
 
+  // AI Room Planner & Optimal Node Placement
+  getAiCropList: () => request<any>('/ai-planner/crops'),
+  getAiRoomPlan: (params: any) =>
+    request<any>('/ai-planner/recommend', { method: 'POST', body: JSON.stringify(params) }),
+  analyzeDecayDispersion: (data: any) =>
+    request<any>('/ai-planner/decay-analysis', { method: 'POST', body: JSON.stringify(data) }),
+
   // Remote Database Telemetry Controller
   getRemoteConfig: () => getRemoteTelemetryConfig(),
   setRemoteConfig: (config: Partial<RemoteTelemetryConfig>) => setRemoteTelemetryConfig(config)

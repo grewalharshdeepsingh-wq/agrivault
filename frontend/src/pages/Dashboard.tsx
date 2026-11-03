@@ -28,7 +28,10 @@ import {
   Edit2,
   Search,
   Filter,
-  Cable
+  Cable,
+  BrainCircuit,
+  Smartphone,
+  QrCode
 } from 'lucide-react';
 import { NetworkTopologyBar } from '../components/NetworkTopologyBar';
 import { DeviceConfigureModal } from '../components/DeviceConfigureModal';
@@ -38,13 +41,17 @@ interface DashboardProps {
   onNavigateToDevices: () => void;
   onNavigateToAlerts: () => void;
   onNavigateToSimulation: () => void;
+  onNavigateToAiPlanner?: () => void;
+  onNavigateToMobileApp?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
   onSelectArea,
   onNavigateToDevices,
   onNavigateToAlerts,
-  onNavigateToSimulation
+  onNavigateToSimulation,
+  onNavigateToAiPlanner,
+  onNavigateToMobileApp
 }) => {
   const { overview, refreshOverview, discoveredDevices } = useApp();
 
@@ -309,13 +316,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
 
           {/* Quick Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onNavigateToAiPlanner && (
+              <button
+                onClick={onNavigateToAiPlanner}
+                className="px-3 py-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                title="Open AI Room Dimension & Node Placement Planner"
+              >
+                <BrainCircuit className="w-4 h-4 text-emerald-400" />
+                <span>AI Room Planner</span>
+              </button>
+            )}
+            {onNavigateToMobileApp && (
+              <button
+                onClick={onNavigateToMobileApp}
+                className="px-3 py-2 rounded-lg bg-blue-950/80 hover:bg-blue-900 text-blue-300 border border-blue-500/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                title="Download Mobile App & Scan QR Code"
+              >
+                <Smartphone className="w-4 h-4 text-blue-400" />
+                <span>Mobile App & QR</span>
+              </button>
+            )}
             <button
               onClick={openCreateModal}
               className="px-3.5 py-2 rounded-lg bg-agri-600 hover:bg-agri-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-md shadow-agri-600/30 transition"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Room / Section</span>
+              <span>Add Room</span>
             </button>
             <button
               onClick={onNavigateToSimulation}

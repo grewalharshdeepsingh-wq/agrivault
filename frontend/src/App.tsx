@@ -29,6 +29,8 @@ import { SettingsPage } from './pages/SettingsPage';
 import { HelpPage } from './pages/HelpPage';
 import { SimulationPage } from './pages/SimulationPage';
 import { RemoteControlPage } from './pages/RemoteControlPage';
+import { AiRoomPlannerPage } from './pages/AiRoomPlannerPage';
+import { MobileAppPage } from './pages/MobileAppPage';
 
 import {
   X,
@@ -46,7 +48,9 @@ import {
   Users,
   HelpCircle,
   Radio,
-  Home
+  Home,
+  BrainCircuit,
+  Smartphone
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -123,6 +127,8 @@ export const App: React.FC = () => {
                     onNavigateToDevices={() => handleTabChange('devices')}
                     onNavigateToAlerts={() => handleTabChange('alerts')}
                     onNavigateToSimulation={() => handleTabChange('simulation')}
+                    onNavigateToAiPlanner={() => handleTabChange('ai_planner')}
+                    onNavigateToMobileApp={() => handleTabChange('mobile_app')}
                   />
                 )}
 
@@ -168,6 +174,10 @@ export const App: React.FC = () => {
                 {currentTab === 'simulation' && <SimulationPage />}
 
                 {currentTab === 'remote_control' && <RemoteControlPage />}
+
+                {currentTab === 'ai_planner' && <AiRoomPlannerPage />}
+
+                {currentTab === 'mobile_app' && <MobileAppPage />}
               </>
             )}
           </div>
@@ -195,6 +205,8 @@ export const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               {[
                 { id: 'dashboard', label: 'Dashboard', icon: Home },
+                { id: 'ai_planner', label: 'AI Room & Node Planner', icon: BrainCircuit },
+                { id: 'mobile_app', label: 'Mobile App & QR Code', icon: Smartphone },
                 { id: 'areas', label: 'Storage Zones', icon: Layers },
                 { id: 'devices', label: 'Sensor Nodes', icon: Cpu },
                 { id: 'gateways', label: 'Central Gateways', icon: Server },

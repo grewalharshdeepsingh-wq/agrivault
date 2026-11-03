@@ -12,14 +12,18 @@ import {
   User as UserIcon,
   Wifi,
   WifiOff,
-  ChevronDown
+  ChevronDown,
+  Smartphone,
+  QrCode
 } from 'lucide-react';
+import { MobileAppModal } from './MobileAppModal';
 
 export const Navbar: React.FC = () => {
   const { overview, isWsConnected, connectionMode, isOnline, simulationStatus, setSimulationScenario, setShowOnboarding } = useApp();
   const { user, role, switchRole } = useAuth();
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [showSimMenu, setShowSimMenu] = useState(false);
+  const [showMobileAppModal, setShowMobileAppModal] = useState(false);
 
   const overallStatus = overview?.overallStatus || 'Normal';
   const activeAlertsCount = overview?.activeAlertsCount || 0;
@@ -165,6 +169,17 @@ export const Navbar: React.FC = () => {
 
         {/* Right: Setup Wizard, Role Switcher, Profile */}
         <div className="flex items-center gap-2">
+          {/* Mobile App & QR Code Launcher */}
+          <button
+            onClick={() => setShowMobileAppModal(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-blue-500/15 hover:bg-blue-500/25 border border-blue-500/40 text-blue-300 text-xs font-semibold transition shadow-sm"
+            title="Download AgriVault Mobile App & Scan QR Code"
+          >
+            <Smartphone className="w-3.5 h-3.5 text-blue-400" />
+            <span className="hidden sm:inline">Mobile App</span>
+            <span className="px-1 py-0.2 rounded text-[9px] bg-blue-500 text-white font-bold">QR</span>
+          </button>
+
           {/* Onboarding Wizard Launcher */}
           <button
             onClick={() => setShowOnboarding(true)}
@@ -215,6 +230,12 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Mobile App PWA Download & QR Code Modal */}
+      <MobileAppModal
+        isOpen={showMobileAppModal}
+        onClose={() => setShowMobileAppModal(false)}
+      />
     </header>
   );
 };

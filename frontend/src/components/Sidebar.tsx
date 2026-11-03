@@ -17,7 +17,9 @@ import {
   QrCode,
   Users,
   HelpCircle,
-  Home
+  Home,
+  BrainCircuit,
+  Smartphone
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
@@ -41,7 +43,9 @@ export type NavTab =
   | 'diagnostics'
   | 'settings'
   | 'help'
-  | 'simulation';
+  | 'simulation'
+  | 'ai_planner'
+  | 'mobile_app';
 
 interface SidebarProps {
   currentTab: NavTab;
@@ -71,6 +75,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
       title: 'Facility Operations',
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'ai_planner', label: 'AI Room & Node Planner', icon: BrainCircuit, badge: 'AI Pro', badgeColor: 'bg-gradient-to-r from-emerald-600 to-teal-600' },
         { id: 'areas', label: 'Storage Zones', icon: Layers, count: overview?.activeAreasCount },
         { id: 'landing', label: 'Platform Portal', icon: Home }
       ]
@@ -105,6 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
     {
       title: 'System & Support',
       items: [
+        { id: 'mobile_app', label: 'Mobile App & QR Code', icon: Smartphone, badge: 'PWA Mobile', badgeColor: 'bg-blue-600' },
         { id: 'diagnostics', label: 'Sensor Diagnostics', icon: Activity },
         { id: 'users', label: 'User Management', icon: Users },
         { id: 'settings', label: 'System Settings', icon: Settings },
