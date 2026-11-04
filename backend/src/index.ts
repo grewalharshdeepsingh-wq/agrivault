@@ -162,8 +162,10 @@ app.get(['/api', '/api/ping', '/ping'], (req, res) => {
 // Serve compiled PWA frontend assets if dist folder exists (local standalone mode only)
 if (!process.env.VERCEL) {
   const possibleDistPaths = [
+    path.resolve(process.cwd(), 'agrivault/frontend/dist'),
+    path.resolve(process.cwd(), 'frontend/dist'),
     path.resolve(process.cwd(), '../frontend/dist'),
-    path.resolve(process.cwd(), 'frontend/dist')
+    'C:\\Users\\Harshdeep singh\\agrivault\\frontend\\dist'
   ];
   const frontendDist = possibleDistPaths.find(p => fs.existsSync(p));
   if (frontendDist) {
