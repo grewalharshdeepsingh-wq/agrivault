@@ -708,5 +708,15 @@ export const api = {
 
   // Remote Database Telemetry Controller
   getRemoteConfig: () => getRemoteTelemetryConfig(),
-  setRemoteConfig: (config: Partial<RemoteTelemetryConfig>) => setRemoteTelemetryConfig(config)
+  setRemoteConfig: (config: Partial<RemoteTelemetryConfig>) => setRemoteTelemetryConfig(config),
+
+  // Autonomous Mind & 3D GPU Spoilage / Wind Flow Engine
+  getAutonomousMindState: () => request<any>('/autonomous-brain/state'),
+  submitSpoilageFeedback: (data: any) =>
+    request<any>('/autonomous-brain/feedback', { method: 'POST', body: JSON.stringify(data) }),
+  configureAutonomousMind: (config: any) =>
+    request<any>('/autonomous-brain/configure', { method: 'POST', body: JSON.stringify(config) }),
+  runGpuSimulation: (params: any) =>
+    request<any>('/autonomous-brain/simulate-gpu', { method: 'POST', body: JSON.stringify(params) }),
+  getGpuHardwareStatus: () => request<any>('/autonomous-brain/gpu-status')
 };

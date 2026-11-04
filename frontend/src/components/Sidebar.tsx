@@ -45,6 +45,7 @@ export type NavTab =
   | 'help'
   | 'simulation'
   | 'ai_planner'
+  | 'autonomous_mind'
   | 'mobile_app';
 
 interface SidebarProps {
@@ -75,6 +76,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onSelectTab }) => 
       title: 'Facility Operations',
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'autonomous_mind', label: 'Autonomous Vault Mind', icon: BrainCircuit, badge: 'GPU RTX', badgeColor: 'bg-emerald-600' },
         { id: 'ai_planner', label: 'AI Room & Node Planner', icon: BrainCircuit, badge: 'AI Pro', badgeColor: 'bg-gradient-to-r from-emerald-600 to-teal-600' },
         { id: 'areas', label: 'Storage Zones', icon: Layers, count: overview?.activeAreasCount },
         { id: 'landing', label: 'Platform Portal', icon: Home }

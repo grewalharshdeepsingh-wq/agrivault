@@ -14,6 +14,12 @@ frontend/index.dev.html
 *.env
 !.env.example
 
+# Python Virtual Environment & Cache
+venv/
+.venv/
+__pycache__/
+*.pyc
+
 # Local SQLite databases & temporary WAL / SHM files
 *.db
 *.db-shm

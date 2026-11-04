@@ -31,6 +31,7 @@ import gatewayRoutes from './routes/gateways.js';
 import cropProfileRoutes from './routes/cropProfiles.js';
 import riskAdvisorRoutes from './routes/riskAdvisor.js';
 import aiPlannerRoutes from './routes/aiPlanner.js';
+import autonomousBrainRoutes from './routes/autonomousBrain.js';
 
 dotenv.config();
 
@@ -134,7 +135,8 @@ const apiRoutes: [string, any][] = [
   ['/gateways', gatewayRoutes],
   ['/crop-profiles', cropProfileRoutes],
   ['/risk-advisor', riskAdvisorRoutes],
-  ['/ai-planner', aiPlannerRoutes]
+  ['/ai-planner', aiPlannerRoutes],
+  ['/autonomous-brain', autonomousBrainRoutes]
 ];
 
 for (const [routePath, handler] of apiRoutes) {

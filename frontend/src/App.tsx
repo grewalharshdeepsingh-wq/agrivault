@@ -30,6 +30,7 @@ import { HelpPage } from './pages/HelpPage';
 import { SimulationPage } from './pages/SimulationPage';
 import { RemoteControlPage } from './pages/RemoteControlPage';
 import { AiRoomPlannerPage } from './pages/AiRoomPlannerPage';
+import { AutonomousVaultMindPage } from './pages/AutonomousVaultMindPage';
 import { MobileAppPage } from './pages/MobileAppPage';
 
 import {
@@ -110,6 +111,7 @@ export const App: React.FC = () => {
                 areaId={selectedAreaId}
                 onBack={handleBackToDashboard}
                 onSelectDevice={handleSelectDevice}
+                onNavigateToAutonomousMind={() => handleTabChange('autonomous_mind')}
               />
             ) : (
               /* 18 Core Application Pages */
@@ -128,6 +130,7 @@ export const App: React.FC = () => {
                     onNavigateToAlerts={() => handleTabChange('alerts')}
                     onNavigateToSimulation={() => handleTabChange('simulation')}
                     onNavigateToAiPlanner={() => handleTabChange('ai_planner')}
+                    onNavigateToAutonomousMind={() => handleTabChange('autonomous_mind')}
                     onNavigateToMobileApp={() => handleTabChange('mobile_app')}
                   />
                 )}
@@ -177,6 +180,8 @@ export const App: React.FC = () => {
 
                 {currentTab === 'ai_planner' && <AiRoomPlannerPage />}
 
+                {currentTab === 'autonomous_mind' && <AutonomousVaultMindPage />}
+
                 {currentTab === 'mobile_app' && <MobileAppPage />}
               </>
             )}
@@ -205,6 +210,7 @@ export const App: React.FC = () => {
             <div className="grid grid-cols-2 gap-2 text-xs">
               {[
                 { id: 'dashboard', label: 'Dashboard', icon: Home },
+                { id: 'autonomous_mind', label: 'Autonomous Vault Mind (GPU)', icon: BrainCircuit },
                 { id: 'ai_planner', label: 'AI Room & Node Planner', icon: BrainCircuit },
                 { id: 'mobile_app', label: 'Mobile App & QR Code', icon: Smartphone },
                 { id: 'areas', label: 'Storage Zones', icon: Layers },

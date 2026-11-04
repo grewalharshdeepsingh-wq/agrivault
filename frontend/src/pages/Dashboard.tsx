@@ -43,6 +43,7 @@ interface DashboardProps {
   onNavigateToSimulation: () => void;
   onNavigateToAiPlanner?: () => void;
   onNavigateToMobileApp?: () => void;
+  onNavigateToAutonomousMind?: () => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -51,7 +52,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigateToAlerts,
   onNavigateToSimulation,
   onNavigateToAiPlanner,
-  onNavigateToMobileApp
+  onNavigateToMobileApp,
+  onNavigateToAutonomousMind
 }) => {
   const { overview, refreshOverview, discoveredDevices } = useApp();
 
@@ -317,13 +319,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           {/* Quick Actions */}
           <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {onNavigateToAutonomousMind && (
+              <button
+                onClick={onNavigateToAutonomousMind}
+                className="px-3 py-2 rounded-lg bg-emerald-950/90 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/50 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                title="Open Autonomous Vault Mind & 3D GPU Spoilage Engine"
+              >
+                <BrainCircuit className="w-4 h-4 text-emerald-400" />
+                <span>Autonomous Mind (GPU)</span>
+              </button>
+            )}
             {onNavigateToAiPlanner && (
               <button
                 onClick={onNavigateToAiPlanner}
-                className="px-3 py-2 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
+                className="px-3 py-2 rounded-lg bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-500/40 text-xs font-semibold flex items-center gap-1.5 shadow-sm transition"
                 title="Open AI Room Dimension & Node Placement Planner"
               >
-                <BrainCircuit className="w-4 h-4 text-emerald-400" />
+                <BrainCircuit className="w-4 h-4 text-teal-400" />
                 <span>AI Room Planner</span>
               </button>
             )}

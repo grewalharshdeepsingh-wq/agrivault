@@ -28,7 +28,8 @@ import {
   TrendingDown,
   TrendingUp,
   Trash2,
-  Unlink
+  Unlink,
+  BrainCircuit
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -36,9 +37,10 @@ interface AreaDetailProps {
   areaId: string;
   onBack: () => void;
   onSelectDevice: (deviceId: string) => void;
+  onNavigateToAutonomousMind?: () => void;
 }
 
-export const AreaDetail: React.FC<AreaDetailProps> = ({ areaId, onBack, onSelectDevice }) => {
+export const AreaDetail: React.FC<AreaDetailProps> = ({ areaId, onBack, onSelectDevice, onNavigateToAutonomousMind }) => {
   const { role } = useAuth();
   const [data, setData] = useState<{
     area: Area;
@@ -179,6 +181,16 @@ export const AreaDetail: React.FC<AreaDetailProps> = ({ areaId, onBack, onSelect
             <Trash2 className="w-3.5 h-3.5" />
             <span>Delete Room</span>
           </button>
+          {onNavigateToAutonomousMind && (
+            <button
+              onClick={onNavigateToAutonomousMind}
+              className="px-2.5 py-1 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/50 text-xs font-semibold flex items-center gap-1.5 transition ml-1"
+              title="Report Spoilage Feedback & Trigger Autonomous GPU Adaptation"
+            >
+              <BrainCircuit className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Report Spoilage (GPU)</span>
+            </button>
+          )}
         </div>
       </div>
 
