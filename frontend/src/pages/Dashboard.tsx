@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { NetworkTopologyBar } from '../components/NetworkTopologyBar';
 import { DeviceConfigureModal } from '../components/DeviceConfigureModal';
+import { GlobalNodeFeedbackBar } from '../components/GlobalNodeFeedbackBar';
 
 interface DashboardProps {
   onSelectArea: (areaId: string) => void;
@@ -480,6 +481,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Big Global Ground-Truth Spoilage & Microclimate Feedback Bar for All Nodes */}
+      <GlobalNodeFeedbackBar onNavigateToAutonomousMind={onNavigateToAutonomousMind} />
 
       {/* Available ESP Nodes Fleet Banner */}
       {(() => {

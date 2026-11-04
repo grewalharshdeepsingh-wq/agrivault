@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { api } from '../api/client';
+import { GlobalNodeFeedbackBar } from '../components/GlobalNodeFeedbackBar';
 
 export const LiveMonitoringPage: React.FC = () => {
   const { devices, areas, overview } = useApp();
@@ -73,6 +74,9 @@ export const LiveMonitoringPage: React.FC = () => {
           </select>
         </div>
       </div>
+
+      {/* Big Global Ground-Truth Spoilage & Microclimate Feedback Bar for All Nodes */}
+      <GlobalNodeFeedbackBar />
 
       {/* Grid of Live Sensor Cards */}
       {filteredSensors.length === 0 ? (

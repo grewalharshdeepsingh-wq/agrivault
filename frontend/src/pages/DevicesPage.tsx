@@ -31,6 +31,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { DeviceConfigureModal } from '../components/DeviceConfigureModal';
+import { GlobalNodeFeedbackBar } from '../components/GlobalNodeFeedbackBar';
 
 export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = ({ onSelectDevice }) => {
   const { overview, refreshOverview } = useApp();
@@ -296,6 +297,9 @@ export const DevicesPage: React.FC<{ onSelectDevice?: (id: string) => void }> = 
           </div>
         </div>
       </div>
+
+      {/* Big Global Ground-Truth Spoilage & Microclimate Feedback Bar for All Nodes */}
+      <GlobalNodeFeedbackBar />
 
       {/* Pending Provisioning Requests Banner (Security Gate) */}
       {pendingDevices.length > 0 && (
